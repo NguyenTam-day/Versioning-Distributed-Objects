@@ -3,7 +3,7 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/node_a" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/node_a/distributed_cad_versioning - Copy" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/node_b" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/shared" vcs="Git" />
   </component>
 </project>
