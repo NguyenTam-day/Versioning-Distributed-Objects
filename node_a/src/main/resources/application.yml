@@ -1,12 +1,12 @@
 server:
-  port: 5001
+  port: 5000
 
 spring:
   data:
     mongodb:
-      uri: mongodb://localhost:27017/cad_node_b
+      uri: mongodb://localhost:27017/cad_node_a
 
 node:
-  name: node-b
+  name: node-a
   peers:
-    - http://localhost:5000
+    - http://localhost:5001
