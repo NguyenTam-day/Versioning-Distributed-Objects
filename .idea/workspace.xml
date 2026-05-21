@@ -5,7 +5,23 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="fab52892-7b70-4328-a5a9-8a5f4c48b711" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/shared/pom.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/FileBasedGeometry3DDemo.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/Geometry3DDemo.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/IntegrationDemo.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/MainDemo.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/CadModel.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/ConflictResolutionStrategy.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/ConflictResolver.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/Delta.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/DeltaUtil.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/Geometry3D.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/Geometry3DDiff.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/ObjParser.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/Version.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/shared/target/classes/org/example/IntegrationDemo.class" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -15,7 +31,7 @@
   <component name="CopilotChats">
     <option name="panelChat">
       <chat>
-        <option name="activeSessionId" value="808461c8-0691-4b40-9790-e9d9c1d6da68" />
+        <option name="activeSessionId" value="256375dd-42f7-488b-9040-042c4aca51ff" />
         <option name="sessions">
           <session>
             <option name="chatType" value="PANEL" />
@@ -64,7 +80,7 @@
             <option name="modeId" value="Agent" />
             <option name="modelType" value="builtin_family" />
             <option name="modelValue" value="auto" />
-            <option name="status" value="Processing" />
+            <option name="status" value="Stopped" />
             <option name="targetType" value="LOCAL" />
           </session>
         </option>
@@ -84,7 +100,7 @@
     </selectedModels>
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="199" />
+    <option name="cachedIndexableFilesCount" value="43502" />
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />

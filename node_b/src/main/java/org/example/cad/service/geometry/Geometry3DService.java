@@ -4,7 +4,9 @@ import org.example.dv.*;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
+import org.springframework.stereotype.Service;
 
+@Service
 /**
  * Service for processing 3D CAD files and managing geometry versions.
  */
