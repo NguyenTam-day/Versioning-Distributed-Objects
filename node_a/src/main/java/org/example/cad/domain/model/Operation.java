@@ -1,4 +1,4 @@
-package org.example.cad.model;
+package org.example.cad.domain.model;
 
 import org.example.cad.domain.enums.OperationType;
 

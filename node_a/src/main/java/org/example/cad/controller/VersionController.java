@@ -2,21 +2,28 @@ package org.example.cad.controller;
 
 import org.example.cad.dto.response.VersionResponse;
 import org.example.cad.dto.common.ApiResponse;
+import org.example.cad.domain.model.VersionDoc;
+import org.example.cad.repository.VersionRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * REST Controller for version management.
+ * Uses MongoDB persistence via VersionRepository
  */
 @RestController
 @RequestMapping("/api/version")
 @CrossOrigin(origins = "*")
 public class VersionController {
 
-    // Mock storage for versions
-    private static final Map<String, List<VersionResponse>> versions = new HashMap<>();
+    private final VersionRepository versionRepository;
+
+    public VersionController(VersionRepository versionRepository) {
+        this.versionRepository = versionRepository;
+    }
 
     /**
      * Checkout a model (get current version for editing)
@@ -26,14 +33,15 @@ public class VersionController {
             @RequestParam String modelId,
             @RequestParam(defaultValue = "main") String branchName) {
         try {
-            List<VersionResponse> modelVersions = versions.getOrDefault(modelId, new ArrayList<>());
+            List<VersionDoc> modelVersions = versionRepository.findByModelIdAndBranchName(modelId, branchName);
             if (modelVersions.isEmpty()) {
                 return ResponseEntity.status(404)
                     .body(new ApiResponse<>(false, "No versions found for model", null));
             }
 
-            VersionResponse latest = modelVersions.get(modelVersions.size() - 1);
-            return ResponseEntity.ok(new ApiResponse<>(true, "Checkout successful", latest));
+            VersionDoc latest = modelVersions.get(modelVersions.size() - 1);
+            VersionResponse response = mapToResponse(latest);
+            return ResponseEntity.ok(new ApiResponse<>(true, "Checkout successful", response));
         } catch (Exception e) {
             return ResponseEntity.status(400)
                 .body(new ApiResponse<>(false, "Checkout failed: " + e.getMessage(), null));
@@ -46,23 +54,30 @@ public class VersionController {
     @PostMapping("/checkin")
     public ResponseEntity<ApiResponse<VersionResponse>> checkin(
             @RequestParam String modelId,
-            @RequestParam(defaultValue = "1") int version,
+            @RequestParam(defaultValue = "1") int baseVersion,
             @RequestParam String commitMessage,
-            @RequestParam String geometry) {
+            @RequestParam String geometry,
+            @RequestParam(defaultValue = "system") String author,
+            @RequestParam(defaultValue = "main") String branchName,
+            @RequestParam(defaultValue = "default-site") String siteId) {
         try {
-            VersionResponse versionResponse = new VersionResponse();
-            versionResponse.id = UUID.randomUUID().toString();
-            versionResponse.modelId = modelId;
-            versionResponse.versionNumber = version + 1;
-            versionResponse.commitMessage = commitMessage;
-            versionResponse.timestamp = new Date();
-            versionResponse.author = "system";
-            versionResponse.geometryData = geometry;
-            versionResponse.branchName = "main";
+            List<VersionDoc> modelVersions = versionRepository.findByModelId(modelId);
+            int nextVersion = modelVersions.isEmpty() ? 1 : modelVersions.size() + 1;
 
-            versions.computeIfAbsent(modelId, k -> new ArrayList<>()).add(versionResponse);
+            VersionDoc versionDoc = VersionDoc.createNew(
+                    modelId,
+                    nextVersion,
+                    commitMessage,
+                    geometry,
+                    author,
+                    siteId,
+                    branchName
+            );
 
-            return ResponseEntity.ok(new ApiResponse<>(true, "Checkin successful", versionResponse));
+            VersionDoc saved = versionRepository.save(versionDoc);
+            VersionResponse response = mapToResponse(saved);
+
+            return ResponseEntity.ok(new ApiResponse<>(true, "Checkin successful", response));
         } catch (Exception e) {
             return ResponseEntity.status(400)
                 .body(new ApiResponse<>(false, "Checkin failed: " + e.getMessage(), null));
@@ -74,8 +89,11 @@ public class VersionController {
      */
     @GetMapping("/{modelId}/history")
     public ResponseEntity<ApiResponse<List<VersionResponse>>> getHistory(@PathVariable String modelId) {
-        List<VersionResponse> modelVersions = versions.getOrDefault(modelId, new ArrayList<>());
-        return ResponseEntity.ok(new ApiResponse<>(true, "History retrieved", modelVersions));
+        List<VersionDoc> modelVersions = versionRepository.findByModelId(modelId);
+        List<VersionResponse> responses = modelVersions.stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(new ApiResponse<>(true, "History retrieved", responses));
     }
 
     /**
@@ -83,11 +101,10 @@ public class VersionController {
      */
     @GetMapping("/{modelId}/branches")
     public ResponseEntity<ApiResponse<List<String>>> getBranches(@PathVariable String modelId) {
-        List<VersionResponse> modelVersions = versions.getOrDefault(modelId, new ArrayList<>());
-        Set<String> branches = new HashSet<>();
-        for (VersionResponse v : modelVersions) {
-            branches.add(v.branchName);
-        }
+        List<VersionDoc> modelVersions = versionRepository.findByModelId(modelId);
+        Set<String> branches = modelVersions.stream()
+                .map(VersionDoc::getBranchName)
+                .collect(Collectors.toSet());
         return ResponseEntity.ok(new ApiResponse<>(true, "Branches retrieved", new ArrayList<>(branches)));
     }
 
@@ -98,13 +115,27 @@ public class VersionController {
     public ResponseEntity<ApiResponse<VersionResponse>> getVersion(
             @PathVariable String modelId,
             @PathVariable int versionNumber) {
-        List<VersionResponse> modelVersions = versions.getOrDefault(modelId, new ArrayList<>());
-        for (VersionResponse v : modelVersions) {
-            if (v.versionNumber == versionNumber) {
-                return ResponseEntity.ok(new ApiResponse<>(true, "Version retrieved", v));
-            }
+        Optional<VersionDoc> version = versionRepository.findByModelIdAndVersionNumber(modelId, versionNumber);
+        if (version.isEmpty()) {
+            return ResponseEntity.status(404)
+                .body(new ApiResponse<>(false, "Version not found", null));
         }
-        return ResponseEntity.status(404)
-            .body(new ApiResponse<>(false, "Version not found", null));
+        return ResponseEntity.ok(new ApiResponse<>(true, "Version retrieved", mapToResponse(version.get())));
+    }
+
+    /**
+     * Helper method to convert VersionDoc to VersionResponse
+     */
+    private VersionResponse mapToResponse(VersionDoc doc) {
+        VersionResponse response = new VersionResponse();
+        response.id = doc.getId();
+        response.modelId = doc.getModelId();
+        response.versionNumber = doc.getVersionNumber();
+        response.commitMessage = doc.getCommitMessage();
+        response.timestamp = new Date(doc.getTimestamp());
+        response.author = doc.getAuthor();
+        response.geometryData = doc.getGeometryData();
+        response.branchName = doc.getBranchName();
+        return response;
     }
 }

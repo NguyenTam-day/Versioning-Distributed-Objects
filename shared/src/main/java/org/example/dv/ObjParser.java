@@ -43,9 +43,18 @@ public class ObjParser {
                 String[] p = line.split("\\s+");
                 List<Integer> idx = new ArrayList<>();
                 for (int i = 1; i < p.length; i++) {
-                    idx.add(Integer.parseInt(p[i]));
+                    String token = p[i];
+                    int slashIdx = token.indexOf('/');
+                    if (slashIdx != -1) {
+                        token = token.substring(0, slashIdx);
+                    }
+                    if (!token.isEmpty()) {
+                        idx.add(Integer.parseInt(token));
+                    }
                 }
-                faces.add(new Geometry3D.Face(idx));
+                if (!idx.isEmpty()) {
+                    faces.add(new Geometry3D.Face(idx));
+                }
             }
         }
 

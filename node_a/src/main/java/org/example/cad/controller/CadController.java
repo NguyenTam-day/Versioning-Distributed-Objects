@@ -2,8 +2,8 @@ package org.example.cad.controller;
 
 import org.example.cad.dto.request.CreateCadRequest;
 import org.example.cad.dto.common.ApiResponse;
-import org.example.cad.model.CadModel;
-import org.example.cad.model.Version;
+import org.example.cad.domain.model.CadModel;
+import org.example.cad.domain.model.Version;
 import org.example.cad.repository.CadModelRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

@@ -1,21 +1,25 @@
 package org.example.cad.service.geometry;
 
+import org.example.cad.domain.model.Geometry3DModel;
+import org.example.cad.repository.Geometry3DRepository;
 import org.example.dv.Geometry3D;
 import org.example.dv.Geometry3DDiff;
 import org.example.dv.ObjParser;
 import org.springframework.stereotype.Service;
+import com.google.gson.Gson;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class Geometry3DService {
 
-    private final Map<String, List<Geometry3D>> geometryStore = new ConcurrentHashMap<>();
-    private final Map<String, String> geometryJson = new ConcurrentHashMap<>();
-    private final Map<String, Map<String, Integer>> siteVersionTracker = new ConcurrentHashMap<>();
+    private final Geometry3DRepository geometry3DRepository;
+
+    public Geometry3DService(Geometry3DRepository geometry3DRepository) {
+        this.geometry3DRepository = geometry3DRepository;
+    }
 
     // =========================
     // REAL PARSER (OBJ)
@@ -34,23 +38,26 @@ public class Geometry3DService {
 
         Geometry3D geometry = parse(inputStream, filename);
 
-        List<Geometry3D> versions =
-                geometryStore.computeIfAbsent(objectId,
-                        k -> Collections.synchronizedList(new ArrayList<>()));
-
-        int newVersion = versions.size() + 1;
+        List<Geometry3DModel> versions = geometry3DRepository.findByObjectId(objectId);
+        int newVersion = versions.isEmpty() ? 1 : versions.size() + 1;
 
         geometry.setVersion(newVersion);
         geometry.setSiteId(siteId);
         geometry.setTimestamp(System.currentTimeMillis());
 
-        versions.add(geometry);
+        // Save to database
+        Geometry3DModel model = Geometry3DModel.createNew(
+                objectId,
+                newVersion,
+                geometry.getName(),
+                geometry.getFormat(),
+                new Gson().toJson(geometry.getVertices()),
+                new Gson().toJson(geometry.getFaces()),
+                new Gson().toJson(geometry),
+                siteId
+        );
 
-        geometryJson.put(objectId + "_" + newVersion, geometry.toJson());
-
-        siteVersionTracker
-                .computeIfAbsent(objectId, k -> new ConcurrentHashMap<>())
-                .put(siteId, newVersion);
+        geometry3DRepository.save(model);
 
         return geometry;
     }
@@ -59,16 +66,22 @@ public class Geometry3DService {
     // GET VERSION
     // =========================
     public Geometry3D getGeometry(String objectId, int version) {
-        List<Geometry3D> versions = geometryStore.get(objectId);
-        if (versions == null || version <= 0 || version > versions.size()) return null;
-        return versions.get(version - 1);
+        Optional<Geometry3DModel> model = geometry3DRepository.findByObjectIdAndVersion(objectId, version);
+        if (model.isEmpty()) return null;
+        return new Gson().fromJson(model.get().getGeometryJson(), Geometry3D.class);
     }
 
     // =========================
     // LIST ALL
     // =========================
     public List<Geometry3D> getAllVersions(String objectId) {
-        return geometryStore.getOrDefault(objectId, new ArrayList<>());
+        List<Geometry3DModel> models = geometry3DRepository.findByObjectId(objectId);
+        List<Geometry3D> result = new ArrayList<>();
+        Gson gson = new Gson();
+        for (Geometry3DModel model : models) {
+            result.add(gson.fromJson(model.getGeometryJson(), Geometry3D.class));
+        }
+        return result;
     }
 
     // =========================
@@ -85,24 +98,29 @@ public class Geometry3DService {
     // JSON SNAPSHOT
     // =========================
     public String getGeometryAsJson(String objectId, int version) {
-        return geometryJson.get(objectId + "_" + version);
+        Optional<Geometry3DModel> model = geometry3DRepository.findByObjectIdAndVersion(objectId, version);
+        return model.map(Geometry3DModel::getGeometryJson).orElse(null);
     }
 
     // =========================
     // VERSION COUNT
     // =========================
     public int getVersionCount(String objectId) {
-        List<Geometry3D> v = geometryStore.get(objectId);
-        return v == null ? 0 : v.size();
+        return (int) geometry3DRepository.findByObjectId(objectId).size();
     }
 
     // =========================
     // CONFLICT CHECK
     // =========================
     public boolean hasConflict(String objectId, String siteId, int baseVersion) {
-        Map<String, Integer> map = siteVersionTracker.get(objectId);
-        if (map == null) return false;
-        Integer last = map.get(siteId);
-        return last != null && last > baseVersion;
+        List<Geometry3DModel> siteVersions = geometry3DRepository.findByObjectIdAndSiteId(objectId, siteId);
+        if (siteVersions.isEmpty()) return false;
+        
+        int latestSiteVersion = siteVersions.stream()
+                .mapToInt(Geometry3DModel::getVersion)
+                .max()
+                .orElse(0);
+        
+        return latestSiteVersion > baseVersion;
     }
 }

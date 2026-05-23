@@ -5,23 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="fab52892-7b70-4328-a5a9-8a5f4c48b711" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/shared/pom.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/FileBasedGeometry3DDemo.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/Geometry3DDemo.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/IntegrationDemo.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/MainDemo.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/CadModel.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/ConflictResolutionStrategy.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/ConflictResolver.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/Delta.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/DeltaUtil.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/Geometry3D.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/Geometry3DDiff.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/ObjParser.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/shared/src/main/java/org/example/dv/Version.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/shared/target/classes/org/example/IntegrationDemo.class" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -31,7 +15,7 @@
   <component name="CopilotChats">
     <option name="panelChat">
       <chat>
-        <option name="activeSessionId" value="256375dd-42f7-488b-9040-042c4aca51ff" />
+        <option name="activeSessionId" value="588bd89e-9909-42b0-addc-836b97b85085" />
         <option name="sessions">
           <session>
             <option name="chatType" value="PANEL" />
@@ -39,7 +23,7 @@
             <option name="modeId" value="Agent" />
             <option name="modelType" value="builtin_family" />
             <option name="modelValue" value="auto" />
-            <option name="status" value="Completed" />
+            <option name="status" value="Stopped" />
             <option name="targetType" value="LOCAL" />
           </session>
           <session>
@@ -81,6 +65,14 @@
             <option name="modelType" value="builtin_family" />
             <option name="modelValue" value="auto" />
             <option name="status" value="Stopped" />
+            <option name="targetType" value="LOCAL" />
+          </session>
+          <session>
+            <option name="chatType" value="PANEL" />
+            <option name="id" value="588bd89e-9909-42b0-addc-836b97b85085" />
+            <option name="modeId" value="Ask" />
+            <option name="modelType" value="builtin_family" />
+            <option name="modelValue" value="auto" />
             <option name="targetType" value="LOCAL" />
           </session>
         </option>
@@ -143,7 +135,7 @@
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;nguyentam1&quot;,
     &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;C:/Users/User/IdeaProjects/distributed_cad_versioning&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;ml.llm.AcpAgentsConfigurable&quot;

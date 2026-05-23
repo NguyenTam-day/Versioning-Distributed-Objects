@@ -1,4 +1,4 @@
-package org.example.cad.model;
+package org.example.cad.domain.model;
 
 public class Version {
 
