@@ -1,128 +1,388 @@
-import React from 'react';
+import React from "react";
 
-const DiffViewer = ({ diffData, loading = false, error = '' }) => {
+const DiffViewer = ({
+    diffData,
+    loading = false,
+    error = "",
+}) => {
+
     if (!diffData) {
+
         return (
+
             <div className="card">
-                <h2> Geometry Diff Viewer</h2>
-                <p style={{ color: '#999' }}>Select two versions to compare</p>
+
+                <h2>
+                    Geometry Diff Viewer
+                </h2>
+
+                <p style={{ color: "#999" }}>
+                    Select two versions to compare
+                </p>
+
             </div>
+
         );
     }
 
     return (
-        <div className="card">
-            <h2> Geometry Diff Viewer</h2>
 
-            {error && <div className="alert alert-error">{error}</div>}
+        <div className="card">
+
+            <h2>
+                Geometry Diff Viewer
+            </h2>
+
+            {error && (
+
+                <div className="alert alert-error">
+                    {error}
+                </div>
+
+            )}
 
             {loading ? (
+
                 <div className="loading">
+
                     <div className="spinner"></div>
-                    <p>Computing diff...</p>
+
+                    <p>
+                        Computing diff...
+                    </p>
+
                 </div>
+
             ) : (
+
                 <>
+
                     <div className="diff-header">
+
                         <span>
-                            <strong>{diffData.objectId}</strong> v{diffData.fromVersion} → v{diffData.toVersion}
+
+                            <strong>
+                                {diffData.objectId}
+                            </strong>
+
+                            {" "}
+                            v{diffData.fromVersion}
+                            {" → "}
+                            v{diffData.toVersion}
+
                         </span>
-                        <span>{diffData.geometryName}</span>
+
+                        <span>
+                            {diffData.geometryName}
+                        </span>
+
                     </div>
 
-                    <div className="stats-grid" style={{ marginTop: '1rem' }}>
-                        <div className="stat-card">
-                            <h3>{diffData.vertexAdditions}</h3>
-                            <p>Vertices Added</p>
-                        </div>
-                        <div className="stat-card">
-                            <h3>{diffData.vertexModifications}</h3>
-                            <p>Vertices Modified</p>
-                        </div>
-                        <div className="stat-card">
-                            <h3>{diffData.vertexDeletions}</h3>
-                            <p>Vertices Deleted</p>
-                        </div>
-                        <div className="stat-card">
-                            <h3>{diffData.faceAdditions}</h3>
-                            <p>Faces Added</p>
-                        </div>
-                        <div className="stat-card">
-                            <h3>{diffData.faceDeletions}</h3>
-                            <p>Faces Deleted</p>
-                        </div>
-                    </div>
+                    <div
+                        className="stats-grid"
+                        style={{ marginTop: "1rem" }}
+                    >
 
-                    <div className="diff-content" style={{ marginTop: '2rem' }}>
-                        <div className="diff-section">
-                            <h4>Vertex Changes</h4>
+                        <div className="stat-card">
+                            <h3>
+                                {diffData.vertexAdditions || 0}
+                            </h3>
                             <p>
-                                {diffData.oldVertexCount} vertices → {diffData.newVertexCount} vertices
+                                Vertices Added
                             </p>
-                            {diffData.vertexChanges && diffData.vertexChanges.length > 0 ? (
-                                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                                    {diffData.vertexChanges.slice(0, 10).map((change, idx) => (
-                                        <div key={idx} className={`diff-stat ${change.type.toLowerCase()}`}>
-                                            <strong>[{change.type}]</strong> Vertex {change.index}
+                        </div>
+
+                        <div className="stat-card">
+                            <h3>
+                                {diffData.vertexModifications || 0}
+                            </h3>
+                            <p>
+                                Vertices Modified
+                            </p>
+                        </div>
+
+                        <div className="stat-card">
+                            <h3>
+                                {diffData.vertexDeletions || 0}
+                            </h3>
+                            <p>
+                                Vertices Deleted
+                            </p>
+                        </div>
+
+                        <div className="stat-card">
+                            <h3>
+                                {diffData.faceAdditions || 0}
+                            </h3>
+                            <p>
+                                Faces Added
+                            </p>
+                        </div>
+
+                        <div className="stat-card">
+                            <h3>
+                                {diffData.faceDeletions || 0}
+                            </h3>
+                            <p>
+                                Faces Deleted
+                            </p>
+                        </div>
+
+                    </div>
+
+                    <div
+                        className="diff-content"
+                        style={{ marginTop: "2rem" }}
+                    >
+
+                        {/* ===================== */}
+                        {/* Vertex Changes */}
+                        {/* ===================== */}
+
+                        <div className="diff-section">
+
+                            <h4>
+                                Vertex Changes
+                            </h4>
+
+                            <p>
+                                {diffData.oldVertexCount || 0}
+                                {" "}
+                                vertices
+                                {" → "}
+                                {diffData.newVertexCount || 0}
+                                {" "}
+                                vertices
+                            </p>
+
+                            {diffData.vertexChanges?.length > 0 ? (
+
+                                <div
+                                    style={{
+                                        maxHeight: "400px",
+                                        overflowY: "auto",
+                                    }}
+                                >
+
+                                    {diffData.vertexChanges
+                                        .slice(0, 10)
+                                        .map((change, idx) => (
+
+                                        <div
+                                            key={idx}
+                                            className={`diff-stat ${change.type?.toLowerCase()}`}
+                                        >
+
+                                            <strong>
+                                                [{change.type}]
+                                            </strong>
+
+                                            {" "}
+                                            Vertex
+                                            {" "}
+                                            {change.index}
+
                                             {change.oldValue && (
-                                                <div style={{ fontSize: '0.85rem' }}>
-                                                    Old: {change.oldValue}
+
+                                                <div
+                                                    style={{
+                                                        fontSize: "0.85rem",
+                                                    }}
+                                                >
+
+                                                    Old:
+                                                    {" "}
+                                                    {JSON.stringify(
+                                                        change.oldValue
+                                                    )}
+
                                                 </div>
+
                                             )}
+
                                             {change.newValue && (
-                                                <div style={{ fontSize: '0.85rem' }}>
-                                                    New: {change.newValue}
+
+                                                <div
+                                                    style={{
+                                                        fontSize: "0.85rem",
+                                                    }}
+                                                >
+
+                                                    New:
+                                                    {" "}
+                                                    {JSON.stringify(
+                                                        change.newValue
+                                                    )}
+
                                                 </div>
+
                                             )}
+
                                         </div>
+
                                     ))}
+
                                     {diffData.vertexChanges.length > 10 && (
-                                        <p style={{ fontSize: '0.85rem', color: '#999' }}>
-                                            ... and {diffData.vertexChanges.length - 10} more
+
+                                        <p
+                                            style={{
+                                                fontSize: "0.85rem",
+                                                color: "#999",
+                                            }}
+                                        >
+
+                                            ...
+                                            {" "}
+                                            and
+                                            {" "}
+                                            {diffData.vertexChanges.length - 10}
+                                            {" "}
+                                            more
+
                                         </p>
+
                                     )}
+
                                 </div>
+
                             ) : (
-                                <p style={{ color: '#999' }}>No vertex changes</p>
+
+                                <p style={{ color: "#999" }}>
+                                    No vertex changes
+                                </p>
+
                             )}
+
                         </div>
 
+                        {/* ===================== */}
+                        {/* Face Changes */}
+                        {/* ===================== */}
+
                         <div className="diff-section">
-                            <h4>Face Changes</h4>
+
+                            <h4>
+                                Face Changes
+                            </h4>
+
                             <p>
-                                {diffData.oldFaceCount} faces → {diffData.newFaceCount} faces
+                                {diffData.oldFaceCount || 0}
+                                {" "}
+                                faces
+                                {" → "}
+                                {diffData.newFaceCount || 0}
+                                {" "}
+                                faces
                             </p>
-                            {diffData.faceChanges && diffData.faceChanges.length > 0 ? (
-                                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                                    {diffData.faceChanges.slice(0, 10).map((change, idx) => (
-                                        <div key={idx} className={`diff-stat ${change.type.toLowerCase()}`}>
-                                            <strong>[{change.type}]</strong> Face {change.index}
+
+                            {diffData.faceChanges?.length > 0 ? (
+
+                                <div
+                                    style={{
+                                        maxHeight: "400px",
+                                        overflowY: "auto",
+                                    }}
+                                >
+
+                                    {diffData.faceChanges
+                                        .slice(0, 10)
+                                        .map((change, idx) => (
+
+                                        <div
+                                            key={idx}
+                                            className={`diff-stat ${change.type?.toLowerCase()}`}
+                                        >
+
+                                            <strong>
+                                                [{change.type}]
+                                            </strong>
+
+                                            {" "}
+                                            Face
+                                            {" "}
+                                            {change.index}
+
                                             {change.oldValue && (
-                                                <div style={{ fontSize: '0.85rem' }}>
-                                                    Old indices: {JSON.stringify(change.oldValue)}
+
+                                                <div
+                                                    style={{
+                                                        fontSize: "0.85rem",
+                                                    }}
+                                                >
+
+                                                    Old:
+                                                    {" "}
+                                                    {JSON.stringify(
+                                                        change.oldValue
+                                                    )}
+
                                                 </div>
+
                                             )}
+
                                             {change.newValue && (
-                                                <div style={{ fontSize: '0.85rem' }}>
-                                                    New indices: {JSON.stringify(change.newValue)}
+
+                                                <div
+                                                    style={{
+                                                        fontSize: "0.85rem",
+                                                    }}
+                                                >
+
+                                                    New:
+                                                    {" "}
+                                                    {JSON.stringify(
+                                                        change.newValue
+                                                    )}
+
                                                 </div>
+
                                             )}
+
                                         </div>
+
                                     ))}
+
                                     {diffData.faceChanges.length > 10 && (
-                                        <p style={{ fontSize: '0.85rem', color: '#999' }}>
-                                            ... and {diffData.faceChanges.length - 10} more
+
+                                        <p
+                                            style={{
+                                                fontSize: "0.85rem",
+                                                color: "#999",
+                                            }}
+                                        >
+
+                                            ...
+                                            {" "}
+                                            and
+                                            {" "}
+                                            {diffData.faceChanges.length - 10}
+                                            {" "}
+                                            more
+
                                         </p>
+
                                     )}
+
                                 </div>
+
                             ) : (
-                                <p style={{ color: '#999' }}>No face changes</p>
+
+                                <p style={{ color: "#999" }}>
+                                    No face changes
+                                </p>
+
                             )}
+
                         </div>
+
                     </div>
+
                 </>
+
             )}
+
         </div>
+
     );
 };
 

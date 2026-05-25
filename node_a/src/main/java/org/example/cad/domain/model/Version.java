@@ -26,7 +26,8 @@ public class Version {
      */
     private boolean fullSnapshot;
 
-    public Version() {}
+    public Version() {
+    }
 
     public int getVersionNumber() {
         return versionNumber;

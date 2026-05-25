@@ -1,39 +1,60 @@
 package org.example.cad.controller;
 
+import org.example.cad.dto.request.CreateVersionRequest;
 import org.example.cad.dto.response.VersionResponse;
 import org.example.cad.dto.common.ApiResponse;
 import org.example.cad.domain.model.VersionDoc;
 import org.example.cad.repository.VersionRepository;
+import org.example.cad.service.version.VersionService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * REST Controller for version management.
- * Uses MongoDB persistence via VersionRepository
- */
+import org.example.cad.service.sync.SyncService;
+
 @RestController
 @RequestMapping("/api/version")
 @CrossOrigin(origins = "*")
 public class VersionController {
 
     private final VersionRepository versionRepository;
+    private final VersionService versionService;
+    private final SyncService syncService;
 
-    public VersionController(VersionRepository versionRepository) {
+    @Value("${app.site-id}")
+    private String currentSiteId;
+
+    public VersionController(VersionRepository versionRepository, VersionService versionService, SyncService syncService) {
         this.versionRepository = versionRepository;
+        this.versionService = versionService;
+        this.syncService = syncService;
     }
 
     @PostMapping("/checkout")
     public ResponseEntity<ApiResponse<VersionResponse>> checkout(
-            @RequestParam String modelId,
-            @RequestParam(defaultValue = "main") String branchName) {
+            @RequestParam(required = false) String modelId,
+            @RequestParam(defaultValue = "main") String branchName,
+            @RequestBody(required = false) Map<String, String> body) {
         try {
-            List<VersionDoc> modelVersions = versionRepository.findByModelIdAndBranchName(modelId, branchName);
+            String targetModelId = modelId;
+            String targetBranch = branchName;
+
+            if (body != null) {
+                if (body.containsKey("modelId")) targetModelId = body.get("modelId");
+                if (body.containsKey("branchName")) targetBranch = body.get("branchName");
+            }
+
+            if (targetModelId == null || targetModelId.isEmpty()) {
+                return ResponseEntity.badRequest().body(new ApiResponse<>(false, "modelId is required", null));
+            }
+
+            List<VersionDoc> modelVersions = versionRepository.findByModelIdAndBranchName(targetModelId, targetBranch);
             if (modelVersions.isEmpty()) {
                 return ResponseEntity.status(404)
-                    .body(new ApiResponse<>(false, "No versions found for model", null));
+                        .body(new ApiResponse<>(false, "No versions found for model " + targetModelId, null));
             }
 
             VersionDoc latest = modelVersions.get(modelVersions.size() - 1);
@@ -41,40 +62,72 @@ public class VersionController {
             return ResponseEntity.ok(new ApiResponse<>(true, "Checkout successful", response));
         } catch (Exception e) {
             return ResponseEntity.status(400)
-                .body(new ApiResponse<>(false, "Checkout failed: " + e.getMessage(), null));
+                    .body(new ApiResponse<>(false, "Checkout failed: " + e.getMessage(), null));
         }
     }
 
     @PostMapping("/checkin")
     public ResponseEntity<ApiResponse<VersionResponse>> checkin(
-            @RequestParam String modelId,
-            @RequestParam(defaultValue = "1") int baseVersion,
-            @RequestParam String commitMessage,
-            @RequestParam String geometry,
+            @RequestParam(required = false) String modelId,
+            @RequestParam(defaultValue = "1") Integer baseVersion,
+            @RequestParam(required = false) String commitMessage,
+            @RequestParam(required = false) String geometry,
             @RequestParam(defaultValue = "system") String author,
             @RequestParam(defaultValue = "main") String branchName,
-            @RequestParam(defaultValue = "default-site") String siteId) {
+            @RequestParam(defaultValue = "default-site") String siteId,
+            @RequestBody(required = false) CreateVersionRequest request) {
         try {
-            List<VersionDoc> modelVersions = versionRepository.findByModelId(modelId);
-            int nextVersion = modelVersions.isEmpty() ? 1 : modelVersions.size() + 1;
+            CreateVersionRequest req = request;
+            if (req == null) {
+                req = new CreateVersionRequest(
+                        modelId,
+                        baseVersion != null ? baseVersion : 1,
+                        commitMessage,
+                        geometry,
+                        author,
+                        branchName,
+                        siteId,
+                        null,
+                        true
+                );
+            }
 
-            VersionDoc versionDoc = VersionDoc.createNew(
-                    modelId,
-                    nextVersion,
-                    commitMessage,
-                    geometry,
-                    author,
-                    siteId,
-                    branchName
-            );
+            if (req.getModelId() == null || req.getModelId().isEmpty()) {
+                return ResponseEntity.badRequest().body(new ApiResponse<>(false, "modelId is required", null));
+            }
 
-            VersionDoc saved = versionRepository.save(versionDoc);
+            VersionDoc saved = versionService.createVersion(req, currentSiteId);
             VersionResponse response = mapToResponse(saved);
+
+            try {
+                syncService.syncVersionToPeers(saved);
+            } catch (Exception e) {
+                // Non-blocking sync
+            }
 
             return ResponseEntity.ok(new ApiResponse<>(true, "Checkin successful", response));
         } catch (Exception e) {
             return ResponseEntity.status(400)
-                .body(new ApiResponse<>(false, "Checkin failed: " + e.getMessage(), null));
+                    .body(new ApiResponse<>(false, "Checkin failed: " + e.getMessage(), null));
+        }
+    }
+
+    @PostMapping("/versions")
+    public ResponseEntity<ApiResponse<VersionResponse>> createVersion(@RequestBody CreateVersionRequest request) {
+        try {
+            VersionDoc saved = versionService.createVersion(request, currentSiteId);
+            VersionResponse response = mapToResponse(saved);
+
+            try {
+                syncService.syncVersionToPeers(saved);
+            } catch (Exception e) {
+                // Non-blocking sync
+            }
+
+            return ResponseEntity.ok(new ApiResponse<>(true, "Version created successfully", response));
+        } catch (Exception e) {
+            return ResponseEntity.status(400)
+                    .body(new ApiResponse<>(false, "Failed to create version: " + e.getMessage(), null));
         }
     }
 
@@ -103,14 +156,11 @@ public class VersionController {
         Optional<VersionDoc> version = versionRepository.findByModelIdAndVersionNumber(modelId, versionNumber);
         if (version.isEmpty()) {
             return ResponseEntity.status(404)
-                .body(new ApiResponse<>(false, "Version not found", null));
+                    .body(new ApiResponse<>(false, "Version not found", null));
         }
         return ResponseEntity.ok(new ApiResponse<>(true, "Version retrieved", mapToResponse(version.get())));
     }
 
-    /**
-     * Helper method to convert VersionDoc to VersionResponse
-     */
     private VersionResponse mapToResponse(VersionDoc doc) {
         VersionResponse response = new VersionResponse();
         response.id = doc.getId();
@@ -121,6 +171,10 @@ public class VersionController {
         response.author = doc.getAuthor();
         response.geometryData = doc.getGeometryData();
         response.branchName = doc.getBranchName();
+        response.parentVersion = doc.getParentVersion();
+        response.fullSnapshot = doc.isFullSnapshot();
+        response.siteId = doc.getSiteId();
+        response.syncStatus = doc.getSyncStatus();
         return response;
     }
 }

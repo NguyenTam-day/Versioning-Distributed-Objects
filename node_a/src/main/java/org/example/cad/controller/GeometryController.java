@@ -3,10 +3,12 @@ package org.example.cad.controller;
 import org.example.cad.dto.response.GeometryDiffResponse;
 import org.example.cad.dto.response.GeometryVersionResponse;
 import org.example.cad.service.geometry.Geometry3DService;
+
 import org.example.dv.Geometry3D;
 import org.example.dv.Geometry3DDiff;
 
 import org.springframework.http.ResponseEntity;
+
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -19,148 +21,241 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class GeometryController {
 
-    private final Geometry3DService geometry3DService;
+        private final Geometry3DService geometry3DService;
 
-    public GeometryController(Geometry3DService geometry3DService) {
-        this.geometry3DService = geometry3DService;
-    }
+        public GeometryController(
+                        Geometry3DService geometry3DService) {
 
-    /**
-     * Upload geometry version (distributed-aware)
-     * Supports multi-site collaboration
-     */
-    @PostMapping("/upload")
-    public ResponseEntity<GeometryVersionResponse> uploadGeometry(
-            @RequestParam("objectId") String objectId,
-            @RequestParam(value = "siteId", required = false, defaultValue = "default-site") String siteId,
-            @RequestParam("file") MultipartFile file) {
-
-        try {
-
-            // upload new version (service should handle version increment)
-            geometry3DService.uploadGeometry(
-                    objectId,
-                    siteId,
-                    file.getInputStream(),
-                    file.getOriginalFilename()
-            );
-
-            int versionCount = geometry3DService.getVersionCount(objectId);
-
-            Geometry3D geom =
-                    geometry3DService.getGeometry(objectId, versionCount);
-
-            String json =
-                    geometry3DService.getGeometryAsJson(objectId, versionCount);
-
-            GeometryVersionResponse response =
-                    new GeometryVersionResponse(
-                            objectId,
-                            versionCount,
-                            geom.getName(),
-                            geom.getFormat(),
-                            geom.getVertices().size(),
-                            geom.getFaces().size(),
-                            json
-                    );
-
-            return ResponseEntity.ok(response);
-
-        } catch (IOException e) {
-            throw new RuntimeException(
-                    "Failed to upload geometry: " + e.getMessage()
-            );
-        }
-    }
-
-    /**
-     * Get all versions
-     */
-    @GetMapping("/{objectId}/versions")
-    public ResponseEntity<List<GeometryVersionResponse>> getAllVersions(
-            @PathVariable String objectId) {
-
-        List<Geometry3D> versions =
-                geometry3DService.getAllVersions(objectId);
-
-        List<GeometryVersionResponse> responses = new ArrayList<>();
-
-        for (int i = 0; i < versions.size(); i++) {
-
-            Geometry3D geom = versions.get(i);
-
-            String json =
-                    geometry3DService.getGeometryAsJson(objectId, i + 1);
-
-            responses.add(
-                    new GeometryVersionResponse(
-                            objectId,
-                            i + 1,
-                            geom.getName(),
-                            geom.getFormat(),
-                            geom.getVertices().size(),
-                            geom.getFaces().size(),
-                            json
-                    )
-            );
+                this.geometry3DService = geometry3DService;
         }
 
-        return ResponseEntity.ok(responses);
-    }
+        /**
+         * Upload geometry
+         */
+        @PostMapping("/upload")
+        public ResponseEntity<GeometryVersionResponse> uploadGeometry(
 
-    /**
-     * Get specific version
-     */
-    @GetMapping("/{objectId}/version/{versionNumber}")
-    public ResponseEntity<GeometryVersionResponse> getVersion(
-            @PathVariable String objectId,
-            @PathVariable int versionNumber) {
+                        @RequestParam("objectId") String objectId,
 
-        Geometry3D geom =
-                geometry3DService.getGeometry(objectId, versionNumber);
+                        @RequestParam("file") MultipartFile file) {
 
-        if (geom == null) {
-            return ResponseEntity.notFound().build();
+                try {
+
+                        /**
+                         * Validate file
+                         */
+                        if (file == null
+                                        || file.isEmpty()) {
+
+                                return ResponseEntity
+                                                .badRequest()
+                                                .build();
+                        }
+
+                        /**
+                         * Upload + store
+                         */
+                        geometry3DService
+                                        .uploadGeometry(
+
+                                                        objectId,
+
+                                                        file.getInputStream(),
+
+                                                        file.getOriginalFilename());
+
+                        /**
+                         * Latest version
+                         */
+                        int versionCount = geometry3DService
+                                        .getVersionCount(
+                                                        objectId);
+
+                        Geometry3D geometry = geometry3DService
+                                        .getGeometry(
+                                                        objectId,
+                                                        versionCount);
+
+                        if (geometry == null) {
+
+                                return ResponseEntity
+                                                .internalServerError()
+                                                .build();
+                        }
+
+                        String json = geometry3DService
+                                        .getGeometryAsJson(
+                                                        objectId,
+                                                        versionCount);
+
+                        /**
+                         * Response DTO
+                         */
+                        GeometryVersionResponse response = new GeometryVersionResponse(
+
+                                        objectId,
+
+                                        versionCount,
+
+                                        geometry.getName(),
+
+                                        geometry.getFormat(),
+
+                                        geometry
+                                                        .getVertices()
+                                                        .size(),
+
+                                        geometry
+                                                        .getFaces()
+                                                        .size(),
+
+                                        json);
+
+                        return ResponseEntity
+                                        .ok(response);
+
+                } catch (IOException e) {
+
+                        throw new RuntimeException(
+                                        "Failed to upload geometry: "
+                                                        + e.getMessage());
+                }
         }
 
-        String json =
-                geometry3DService.getGeometryAsJson(objectId, versionNumber);
+        /**
+         * Get all versions
+         */
+        @GetMapping("/{objectId}/versions")
+        public ResponseEntity<List<GeometryVersionResponse>> getAllVersions(
 
-        GeometryVersionResponse response =
-                new GeometryVersionResponse(
-                        objectId,
-                        versionNumber,
-                        geom.getName(),
-                        geom.getFormat(),
-                        geom.getVertices().size(),
-                        geom.getFaces().size(),
-                        json
-                );
+                        @PathVariable String objectId) {
 
-        return ResponseEntity.ok(response);
-    }
+                List<Geometry3D> versions = geometry3DService
+                                .getAllVersions(
+                                                objectId);
 
-    /**
-     * Diff versions (delta analysis)
-     */
-    @GetMapping("/{objectId}/diff")
-    public ResponseEntity<GeometryDiffResponse> diffVersions(
-            @PathVariable String objectId,
-            @RequestParam int from,
-            @RequestParam int to) {
+                List<GeometryVersionResponse> responses = new ArrayList<>();
 
-        Geometry3DDiff.DiffReport report =
-                geometry3DService.diffVersions(objectId, from, to);
+                for (Geometry3D geometry : versions) {
 
-        if (report == null) {
-            return ResponseEntity.notFound().build();
+                        String json = geometry3DService
+                                        .getGeometryAsJson(
+
+                                                        objectId,
+
+                                                        geometry.getVersion());
+
+                        responses.add(
+
+                                        new GeometryVersionResponse(
+
+                                                        objectId,
+
+                                                        geometry.getVersion(),
+
+                                                        geometry.getName(),
+
+                                                        geometry.getFormat(),
+
+                                                        geometry
+                                                                        .getVertices()
+                                                                        .size(),
+
+                                                        geometry
+                                                                        .getFaces()
+                                                                        .size(),
+
+                                                        json));
+                }
+
+                return ResponseEntity
+                                .ok(responses);
         }
 
-        GeometryDiffResponse response =
-                new GeometryDiffResponse(objectId, from, to);
+        /**
+         * Get single version
+         */
+        @GetMapping("/{objectId}/version/{versionNumber}")
+        public ResponseEntity<GeometryVersionResponse> getVersion(
 
-        response.geometryName = report.geometryName;
+                        @PathVariable String objectId,
 
-        return ResponseEntity.ok(response);
-    }
+                        @PathVariable int versionNumber) {
+
+                Geometry3D geometry = geometry3DService
+                                .getGeometry(
+                                                objectId,
+                                                versionNumber);
+
+                if (geometry == null) {
+
+                        return ResponseEntity
+                                        .notFound()
+                                        .build();
+                }
+
+                String json = geometry3DService
+                                .getGeometryAsJson(
+                                                objectId,
+                                                versionNumber);
+
+                GeometryVersionResponse response = new GeometryVersionResponse(
+
+                                objectId,
+
+                                versionNumber,
+
+                                geometry.getName(),
+
+                                geometry.getFormat(),
+
+                                geometry
+                                                .getVertices()
+                                                .size(),
+
+                                geometry
+                                                .getFaces()
+                                                .size(),
+
+                                json);
+
+                return ResponseEntity
+                                .ok(response);
+        }
+
+        /**
+         * Compare versions
+         */
+        @GetMapping("/{objectId}/diff")
+        public ResponseEntity<GeometryDiffResponse> diffVersions(
+
+                        @PathVariable String objectId,
+
+                        @RequestParam int from,
+
+                        @RequestParam int to) {
+
+                Geometry3DDiff.DiffReport report = geometry3DService
+                                .diffVersions(
+                                                objectId,
+                                                from,
+                                                to);
+
+                if (report == null) {
+
+                        return ResponseEntity
+                                        .notFound()
+                                        .build();
+                }
+
+                GeometryDiffResponse response = new GeometryDiffResponse(
+                                objectId,
+                                from,
+                                to);
+
+                response.geometryName = report.geometryName;
+
+                return ResponseEntity
+                                .ok(response);
+        }
 }

@@ -9,7 +9,7 @@ import lombok.AllArgsConstructor;
 import java.util.UUID;
 
 /**
- * Version document for MongoDB persistence (Node B)
+ * Version document for MongoDB persistence
  * Stores individual version history entries
  */
 @Document(collection = "versions")
@@ -29,6 +29,9 @@ public class VersionDoc {
     private String geometryData;
     private String branchName;
     private String siteId;
+    private String syncStatus;
+    private String parentVersion;
+    private boolean fullSnapshot;
 
     public static VersionDoc createNew(
             String modelId,
@@ -37,8 +40,9 @@ public class VersionDoc {
             String geometryData,
             String author,
             String siteId,
-            String branchName
-    ) {
+            String branchName,
+            String parentVersion,
+            boolean fullSnapshot) {
         VersionDoc doc = new VersionDoc();
         doc.setId(UUID.randomUUID().toString());
         doc.setModelId(modelId);
@@ -49,7 +53,20 @@ public class VersionDoc {
         doc.setAuthor(author);
         doc.setSiteId(siteId);
         doc.setBranchName(branchName != null ? branchName : "main");
+        doc.setSyncStatus("PENDING_SYNC");
+        doc.setParentVersion(parentVersion);
+        doc.setFullSnapshot(fullSnapshot);
         return doc;
     }
-}
 
+    public static VersionDoc createNew(
+            String modelId,
+            int versionNumber,
+            String commitMessage,
+            String geometryData,
+            String author,
+            String siteId,
+            String branchName) {
+        return createNew(modelId, versionNumber, commitMessage, geometryData, author, siteId, branchName, null, true);
+    }
+}

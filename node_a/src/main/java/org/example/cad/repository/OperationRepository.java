@@ -9,24 +9,23 @@ import java.util.List;
 @Repository
 public interface OperationRepository extends MongoRepository<Operation, String> {
 
-//    /**
-//     * Find all operations for a specific model
-//     */
-//    List<Operation> findByModelId(String modelId);
-//
-//    /**
-//     * Find operations by model and version
-//     */
-//    List<Operation> findByModelIdAndVersionId(String modelId, String versionId);
-//
-//    /**
-//     * Find operations by site
-//     */
-//    List<Operation> findBySiteId(String siteId);
-//
-//    /**
-//     * Find operations in timestamp range
-//     */
-//    List<Operation> findByTimestampBetween(long startTime, long endTime);
+    // /**
+    // * Find all operations for a specific model
+    // */
+    // List<Operation> findByModelId(String modelId);
+    //
+    // /**
+    // * Find operations by model and version
+    // */
+    // List<Operation> findByModelIdAndVersionId(String modelId, String versionId);
+    //
+    // /**
+    // * Find operations by site
+    // */
+    // List<Operation> findBySiteId(String siteId);
+    //
+    // /**
+    // * Find operations in timestamp range
+    // */
+    // List<Operation> findByTimestampBetween(long startTime, long endTime);
 }
-

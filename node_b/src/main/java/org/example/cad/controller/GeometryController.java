@@ -7,6 +7,7 @@ import org.example.cad.service.geometry.Geometry3DService;
 import org.example.dv.Geometry3D;
 import org.example.dv.Geometry3DDiff;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -22,6 +23,13 @@ public class GeometryController {
 
     private final Geometry3DService geometry3DService;
 
+    /**
+     * siteId lấy từ application.yml (app.site-id)
+     * Không nhận từ request — tránh client gửi sai node
+     */
+    @Value("${app.site-id}")
+    private String siteId;
+
     public GeometryController(Geometry3DService geometry3DService) {
         this.geometry3DService = geometry3DService;
     }
@@ -32,7 +40,6 @@ public class GeometryController {
     @PostMapping("/upload")
     public ResponseEntity<GeometryVersionResponse> uploadGeometry(
             @RequestParam("objectId") String objectId,
-            @RequestParam(value = "siteId", required = false, defaultValue = "node_b") String siteId,
             @RequestParam("file") MultipartFile file) {
 
         try {
@@ -42,7 +49,6 @@ public class GeometryController {
 
             geometry3DService.uploadGeometry(
                     objectId,
-                    siteId,
                     file.getInputStream(),
                     file.getOriginalFilename()
             );

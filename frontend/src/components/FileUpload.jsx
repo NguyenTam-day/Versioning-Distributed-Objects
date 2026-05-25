@@ -1,30 +1,46 @@
-import React, { useState, useRef } from 'react';
-import { geometryServiceNodeA, geometryServiceNodeB } from '../services/api';
+import React, {
+    useState,
+    useRef,
+} from "react";
 
-const FileUpload = ({ node = 'A', onUploadSuccess }) => {
+import { useNode } from "../hooks/useNode";
+
+// ======================================================
+// FileUpload
+//
+// Dùng api từ NodeContext — không còn apiService.setNode()
+// Node được xác định 1 lần duy nhất từ NodeProvider cha
+// ======================================================
+
+const FileUpload = ({ onUploadSuccess }) => {
+
+    const { currentNode, api } = useNode();
+
     const [file, setFile] = useState(null);
-    const [objectId, setObjectId] = useState('');
+    const [objectId, setObjectId] = useState("");
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+    const [error, setError] = useState("");
+    const [success, setSuccess] = useState("");
+
     const fileInputRef = useRef(null);
     const dropZoneRef = useRef(null);
 
-    const geometryService = node === 'A' ? geometryServiceNodeA : geometryServiceNodeB;
+    // ─── Drag & Drop handlers ─────────────────────────
 
     const handleDragOver = (e) => {
         e.preventDefault();
-        dropZoneRef.current?.classList.add('dragover');
+        dropZoneRef.current?.classList.add("dragover");
     };
 
     const handleDragLeave = (e) => {
         e.preventDefault();
-        dropZoneRef.current?.classList.remove('dragover');
+        dropZoneRef.current?.classList.remove("dragover");
     };
 
     const handleDrop = (e) => {
         e.preventDefault();
-        dropZoneRef.current?.classList.remove('dragover');
+        dropZoneRef.current?.classList.remove("dragover");
+
         const droppedFiles = e.dataTransfer.files;
         if (droppedFiles.length > 0) {
             setFile(droppedFiles[0]);
@@ -37,50 +53,88 @@ const FileUpload = ({ node = 'A', onUploadSuccess }) => {
         }
     };
 
+    // ─── Upload ───────────────────────────────────────
+
     const handleUpload = async () => {
+
         if (!file || !objectId.trim()) {
-            setError('Please select a file and enter an object ID');
+            setError("Please select a file and enter an object ID");
             return;
         }
 
         setLoading(true);
-        setError('');
-        setSuccess('');
+        setError("");
+        setSuccess("");
 
         try {
-            const response = await geometryService.uploadGeometry(objectId, file);
-            setSuccess(`✓ File uploaded successfully! Version: ${response.data.versionNumber}`);
+
+            // api instance được tạo sẵn cho currentNode
+            // không cần setNode trước khi gọi
+            const response = await api.uploadGeometry(objectId, file);
+
+            setSuccess(
+                `✓ File uploaded successfully to ${currentNode}! Version: ${response.data.versionNumber}`
+            );
+
             setFile(null);
-            setObjectId('');
+            setObjectId("");
+
             if (fileInputRef.current) {
-                fileInputRef.current.value = '';
+                fileInputRef.current.value = "";
             }
+
             if (onUploadSuccess) {
                 onUploadSuccess(response.data);
             }
+
         } catch (err) {
-            setError(`Upload failed: ${err.response?.data?.message || err.message}`);
+
+            console.error(err);
+
+            setError(
+                `Upload failed: ${
+                    err.response?.data?.message || err.message
+                }`
+            );
+
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="card">
-            <h2> Upload 3D Model (Node {node})</h2>
 
-            {error && <div className="alert alert-error">{error}</div>}
-            {success && <div className="alert alert-success">{success}</div>}
+        <div className="card">
+
+            <h2>
+                Upload 3D Model{" "}
+                ({currentNode})
+            </h2>
+
+            {error && (
+                <div className="alert alert-error">
+                    {error}
+                </div>
+            )}
+
+            {success && (
+                <div className="alert alert-success">
+                    {success}
+                </div>
+            )}
 
             <div className="form-group">
+
                 <label>Object ID</label>
+
                 <input
                     type="text"
-                    placeholder="e.g., cube-model, part-001"
+                    placeholder="cube-model"
                     value={objectId}
                     onChange={(e) => setObjectId(e.target.value)}
                     disabled={loading}
                 />
+
             </div>
 
             <div
@@ -91,21 +145,27 @@ const FileUpload = ({ node = 'A', onUploadSuccess }) => {
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
             >
-                <p> Drag and drop your 3D file here, or click to browse</p>
-                <small>Supported formats: OBJ, STL, STEP, IGES (up to 50MB)</small>
+
+                <p>Drag & Drop CAD File</p>
+                <small>OBJ, STL, STEP, IGES</small>
+
                 <input
                     ref={fileInputRef}
                     type="file"
                     accept=".obj,.stl,.step,.iges"
                     onChange={handleFileSelect}
-                    style={{ display: 'none' }}
+                    style={{ display: "none" }}
                 />
+
             </div>
 
             {file && (
-                <div style={{ marginTop: '1rem' }}>
+                <div style={{ marginTop: "1rem" }}>
                     <p>
-                        ✓ Selected: <strong>{file.name}</strong> ({(file.size / 1024).toFixed(2)} KB)
+                        ✓ Selected:{" "}
+                        <strong>{file.name}</strong>
+                        {" "}
+                        ({(file.size / 1024).toFixed(2)} KB)
                     </p>
                 </div>
             )}
@@ -114,10 +174,14 @@ const FileUpload = ({ node = 'A', onUploadSuccess }) => {
                 className="btn btn-primary"
                 onClick={handleUpload}
                 disabled={loading || !file || !objectId.trim()}
-                style={{ marginTop: '1rem' }}
+                style={{ marginTop: "1rem" }}
             >
-                {loading ? '⏳ Uploading...' : 'Upload'} →
+                {loading
+                    ? "⏳ Uploading..."
+                    : `Upload to ${currentNode}`}
+                {" →"}
             </button>
+
         </div>
     );
 };

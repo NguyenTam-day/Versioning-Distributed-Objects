@@ -1,0 +1,128 @@
+version: '3.8'
+
+services:
+  # MongoDB for Node A
+  mongo-node-a:
+    image: mongo:6.0
+    container_name: mongo-node-a
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: cad_node_a
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-node-a-data:/data/db
+    networks:
+      - cad-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB for Node B
+  mongo-node-b:
+    image: mongo:6.0
+    container_name: mongo-node-b
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: cad_node_b
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo-node-b-data:/data/db
+    networks:
+      - cad-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Spring Boot Node A
+  node-a:
+    build:
+      context: ./node_a
+      dockerfile: Dockerfile
+    container_name: cad-node-a
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATA_MONGODB_URI: mongodb://admin:password123@mongo-node-a:27017/cad_node_a?authSource=admin
+      SERVER_PORT: 5000
+      NODE_ID: node_a
+      NODE_URL: http://node-a:5000
+      PEER_NODE_URL: http://node-b:5001
+    ports:
+      - "5000:5000"
+    depends_on:
+      mongo-node-a:
+        condition: service_healthy
+    networks:
+      - cad-network
+    volumes:
+      - ./sample-files:/app/sample-files
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5000/api/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Spring Boot Node B
+  node-b:
+    build:
+      context: ./node_b
+      dockerfile: Dockerfile
+    container_name: cad-node-b
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATA_MONGODB_URI: mongodb://admin:password123@mongo-node-b:27017/cad_node_b?authSource=admin
+      SERVER_PORT: 5001
+      NODE_ID: node_b
+      NODE_URL: http://node-b:5001
+      PEER_NODE_URL: http://node-a:5000
+    ports:
+      - "5001:5001"
+    depends_on:
+      mongo-node-b:
+        condition: service_healthy
+    networks:
+      - cad-network
+    volumes:
+      - ./sample-files:/app/sample-files
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5001/api/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cad-frontend
+    environment:
+      REACT_APP_API_NODE_A: http://localhost:5000/api
+      REACT_APP_API_NODE_B: http://localhost:5001/api
+      REACT_APP_ENABLE_BABYLON: "true"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - node-a
+      - node-b
+    networks:
+      - cad-network
+    stdin_open: true
+    tty: true
+
+volumes:
+  mongo-node-a-data:
+    driver: local
+  mongo-node-b-data:
+    driver: local
+
+networks:
+  cad-network:
+    driver: bridge

@@ -33,7 +33,7 @@ const HomePage = ({ onNavigate }) => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
                     <button
                         className="btn btn-primary"
-                        onClick={() => onNavigate('dashboard')}
+                        onClick={() => onNavigate('dashboard-a')}
                         style={{ padding: '1.5rem', fontSize: '1.1rem', height: 'auto' }}
                     >
                         ️ Dashboard

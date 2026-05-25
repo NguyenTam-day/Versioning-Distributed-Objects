@@ -1,38 +1,92 @@
 package org.example.cad.repository;
 
 import org.example.cad.domain.model.Geometry3DModel;
+
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Geometry Repository
+ *
+ * Handles:
+ * - version queries
+ * - distributed node queries
+ * - conflict detection
+ * - history lookup
+ */
 @Repository
-public interface Geometry3DRepository extends MongoRepository<Geometry3DModel, String> {
+public interface Geometry3DRepository
+        extends MongoRepository<Geometry3DModel, String> {
 
     /**
-     * Find all versions for a specific object
+     * Get all versions
+     * sorted ascending
      */
-    List<Geometry3DModel> findByObjectId(String objectId);
+    List<Geometry3DModel> findByObjectIdOrderByVersionAsc(
+            String objectId);
 
     /**
-     * Find specific version by object and version number
+     * Get all versions
      */
-    Optional<Geometry3DModel> findByObjectIdAndVersion(String objectId, int version);
+    List<Geometry3DModel> findByObjectId(
+            String objectId);
 
     /**
-     * Find latest version for an object
+     * Get specific version
      */
-    Optional<Geometry3DModel> findFirstByObjectIdOrderByVersionDesc(String objectId);
+    Optional<Geometry3DModel> findByObjectIdAndVersion(
+            String objectId,
+            int version);
 
     /**
-     * Find all versions created by a specific site
+     * Get latest version
      */
-    List<Geometry3DModel> findByObjectIdAndSiteId(String objectId, String siteId);
+    Optional<Geometry3DModel> findFirstByObjectIdOrderByVersionDesc(
+            String objectId);
 
     /**
-     * Find versions in timestamp range
+     * Count total versions
      */
-    List<Geometry3DModel> findByObjectIdAndTimestampBetween(String objectId, long startTime, long endTime);
+    long countByObjectId(
+            String objectId);
+
+    /**
+     * Get all versions
+     * from specific site/node
+     */
+    List<Geometry3DModel> findByObjectIdAndSiteId(
+            String objectId,
+            String siteId);
+
+    /**
+     * Get versions
+     * inside time range
+     */
+    List<Geometry3DModel> findByObjectIdAndTimestampBetween(
+            String objectId,
+            long startTime,
+            long endTime);
+
+    /**
+     * Delete all versions
+     * of an object
+     */
+    void deleteByObjectId(
+            String objectId);
+
+    /**
+     * Check object exists
+     */
+    boolean existsByObjectId(
+            String objectId);
+
+    /**
+     * Find all objects
+     * created by site/node
+     */
+    List<Geometry3DModel> findBySiteId(
+            String siteId);
 }
-

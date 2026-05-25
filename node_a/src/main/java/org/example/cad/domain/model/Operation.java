@@ -10,7 +10,8 @@ public class Operation {
     private String targetId;
     private Instant timestamp;
 
-    public Operation() {}
+    public Operation() {
+    }
 
     public Operation(OperationType type, String targetId) {
         this.type = type;

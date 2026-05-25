@@ -1,11 +1,15 @@
 package org.example.cad.service.geometry;
 
 import org.example.cad.domain.model.Geometry3DModel;
+import org.example.cad.domain.model.VersionDoc;
 import org.example.cad.repository.Geometry3DRepository;
+import org.example.cad.repository.VersionRepository;
+import org.example.cad.service.sync.SyncService;
 import org.example.dv.*;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import com.google.gson.Gson;
 
@@ -15,22 +19,37 @@ import com.google.gson.Gson;
  */
 public class Geometry3DService {
     private final Geometry3DRepository geometry3DRepository;
+    private final VersionRepository versionRepository;
+    private final SyncService syncService;
 
-    public Geometry3DService(Geometry3DRepository geometry3DRepository) {
+    /**
+     * siteId lấy từ application.yml (app.site-id: node-b)
+     * Đảm bảo luôn lưu đúng node vào database
+     */
+    @Value("${app.site-id}")
+    private String currentSiteId;
+
+    public Geometry3DService(
+            Geometry3DRepository geometry3DRepository,
+            VersionRepository versionRepository,
+            SyncService syncService) {
         this.geometry3DRepository = geometry3DRepository;
+        this.versionRepository = versionRepository;
+        this.syncService = syncService;
     }
 
     /**
      * Upload and parse a 3D file (OBJ format).
+     * siteId được lấy từ application config — không nhận từ tham số
      */
-    public String uploadGeometry(String objectId, String siteId, InputStream inputStream, String filename) throws IOException {
+    public String uploadGeometry(String objectId, InputStream inputStream, String filename) throws IOException {
         Geometry3D geometry = ObjParser.parseFromInputStream(inputStream, filename);
 
         List<Geometry3DModel> versions = geometry3DRepository.findByObjectId(objectId);
         int newVersion = versions.isEmpty() ? 1 : versions.size() + 1;
 
         geometry.setVersion(newVersion);
-        geometry.setSiteId(siteId);
+        geometry.setSiteId(currentSiteId);
         geometry.setTimestamp(System.currentTimeMillis());
 
         // Save to database
@@ -42,12 +61,39 @@ public class Geometry3DService {
                 new Gson().toJson(geometry.getVertices()),
                 new Gson().toJson(geometry.getFaces()),
                 new Gson().toJson(geometry),
-                "node_b"
+                currentSiteId
         );
 
         geometry3DRepository.save(model);
 
-        return geometry.toString();
+        // Create corresponding VersionDoc
+        String parentVersion = null;
+        if (newVersion > 1) {
+            parentVersion = String.valueOf(newVersion - 1);
+        }
+
+        VersionDoc versionDoc = VersionDoc.createNew(
+                objectId,
+                newVersion,
+                "Upload file: " + filename,
+                new Gson().toJson(geometry),
+                "system",
+                currentSiteId,
+                "main",
+                parentVersion,
+                true
+        );
+
+        versionRepository.save(versionDoc);
+
+        // Asynchronously sync version to peers
+        try {
+            syncService.syncVersionToPeers(versionDoc);
+        } catch (Exception e) {
+            // Non-blocking sync
+        }
+
+        return new Gson().toJson(geometry);
     }
 
     /**

@@ -37,7 +37,8 @@ public class CadModel {
      */
     private String lockedBySite;
 
-    public CadModel() {}
+    public CadModel() {
+    }
 
     public CadModel(String partId, String geometry) {
         this.partId = partId;
@@ -94,7 +95,8 @@ public class CadModel {
     }
 
     public Version getLatestVersion() {
-        if (versions.isEmpty()) return null;
+        if (versions.isEmpty())
+            return null;
         return versions.get(versions.size() - 1);
     }
 }

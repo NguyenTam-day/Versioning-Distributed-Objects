@@ -6,6 +6,9 @@ spring:
     mongodb:
       uri: mongodb+srv://cad_node_b:Qwertyuiop123%21@cluster0.fl6igei.mongodb.net/cad_node_b?appName=Cluster0
 
+app:
+  site-id: node-b
+
 node:
   name: node-b
   peers:
