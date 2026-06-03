@@ -1,151 +1,147 @@
 package org.example.cad.controller;
 
-import org.example.cad.service.geometry.Geometry3DService;
 import org.example.cad.dto.response.GeometryVersionResponse;
 import org.example.cad.dto.response.GeometryDiffResponse;
-import org.example.dv.*;
+import org.example.cad.service.Geometry3DService;
+import org.example.dv.Geometry3D;
+import org.example.dv.Geometry3DDiff;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 
-/**
- * REST Controller for 3D Geometry upload, parsing, and diff operations.
- * Endpoints (for demo, without Spring annotations):
- *  POST   /api/geometry upload
- *  GET    /api/geometry/{id}/versions
- *  GET    /api/geometry/{id}/version/{versionNumber}
- *  GET    /api/geometry/{id}/diff
- */
+@RestController
+@RequestMapping("/api/geometry")
+@CrossOrigin(origins = "*")
 public class GeometryController {
+
     private final Geometry3DService geometry3DService;
+
+    /**
+     * siteId lấy từ application.yml (app.site-id)
+     * Không nhận từ request — tránh client gửi sai node
+     */
+    @Value("${app.site-id}")
+    private String siteId;
 
     public GeometryController(Geometry3DService geometry3DService) {
         this.geometry3DService = geometry3DService;
     }
 
     /**
-     * Upload a 3D file and parse it.
-     * Mock: returns summary of parsed geometry.
+     * Upload geometry version — parse OBJ, lưu vào collection "geometries"
      */
-    public GeometryVersionResponse uploadGeometry(String objectId, InputStream fileInputStream, String filename) {
+    @PostMapping("/upload")
+    public ResponseEntity<GeometryVersionResponse> uploadGeometry(
+            @RequestParam("objectId") String objectId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "parentVersion", required = false) String parentVersion,
+            @RequestParam(value = "branchName", required = false) String branchName) {
+
         try {
-            geometry3DService.uploadGeometry(objectId, fileInputStream, filename);
+            if (file == null || file.isEmpty()) {
+                return ResponseEntity.status(400).build();
+            }
+
+            geometry3DService.uploadGeometry(
+                    objectId,
+                    file.getInputStream(),
+                    file.getOriginalFilename(),
+                    parentVersion,
+                    branchName);
+
             int versionCount = geometry3DService.getVersionCount(objectId);
+
             Geometry3D geom = geometry3DService.getGeometry(objectId, versionCount);
+
             String json = geometry3DService.getGeometryAsJson(objectId, versionCount);
 
-            return new GeometryVersionResponse(
-                objectId,
-                versionCount,
-                geom.getName(),
-                geom.getFormat(),
-                geom.getVertices().size(),
-                geom.getFaces().size(),
-                json
-            );
+            GeometryVersionResponse response = new GeometryVersionResponse(
+                    objectId,
+                    versionCount,
+                    geom.getName(),
+                    geom.getFormat(),
+                    geom.getVertices().size(),
+                    geom.getFaces().size(),
+                    json);
+
+            return ResponseEntity.ok(response);
+
         } catch (IOException e) {
             throw new RuntimeException("Failed to upload geometry: " + e.getMessage());
         }
     }
 
     /**
-     * Get all versions of a geometry object.
+     * Lấy tất cả versions của một object
      */
-    public List<GeometryVersionResponse> getAllVersions(String objectId) {
+    @GetMapping("/{objectId}/versions")
+    public ResponseEntity<List<GeometryVersionResponse>> getAllVersions(
+            @PathVariable String objectId) {
+
         List<Geometry3D> versions = geometry3DService.getAllVersions(objectId);
+
         List<GeometryVersionResponse> responses = new ArrayList<>();
 
         for (int i = 0; i < versions.size(); i++) {
             Geometry3D geom = versions.get(i);
             String json = geometry3DService.getGeometryAsJson(objectId, i + 1);
             responses.add(new GeometryVersionResponse(
-                objectId,
-                i + 1,
-                geom.getName(),
-                geom.getFormat(),
-                geom.getVertices().size(),
-                geom.getFaces().size(),
-                json
-            ));
+                    objectId, i + 1,
+                    geom.getName(), geom.getFormat(),
+                    geom.getVertices().size(), geom.getFaces().size(),
+                    json));
         }
 
-        return responses;
+        return ResponseEntity.ok(responses);
     }
 
     /**
-     * Get a specific version of a geometry object.
+     * Lấy một version cụ thể
      */
-    public GeometryVersionResponse getVersion(String objectId, int versionNumber) {
+    @GetMapping("/{objectId}/version/{versionNumber}")
+    public ResponseEntity<GeometryVersionResponse> getVersion(
+            @PathVariable String objectId,
+            @PathVariable int versionNumber) {
+
         Geometry3D geom = geometry3DService.getGeometry(objectId, versionNumber);
+
         if (geom == null) {
-            throw new RuntimeException("Version not found");
+            return ResponseEntity.notFound().build();
         }
 
         String json = geometry3DService.getGeometryAsJson(objectId, versionNumber);
-        return new GeometryVersionResponse(
-            objectId,
-            versionNumber,
-            geom.getName(),
-            geom.getFormat(),
-            geom.getVertices().size(),
-            geom.getFaces().size(),
-            json
-        );
+
+        return ResponseEntity.ok(new GeometryVersionResponse(
+                objectId, versionNumber,
+                geom.getName(), geom.getFormat(),
+                geom.getVertices().size(), geom.getFaces().size(),
+                json));
     }
 
     /**
-     * Compute diff between two versions.
+     * So sánh diff giữa 2 versions
      */
-    public GeometryDiffResponse diffVersions(String objectId, int fromVersion, int toVersion) {
-        Geometry3DDiff.DiffReport report = geometry3DService.diffVersions(objectId, fromVersion, toVersion);
+    @GetMapping("/{objectId}/diff")
+    public ResponseEntity<GeometryDiffResponse> diffVersions(
+            @PathVariable String objectId,
+            @RequestParam int from,
+            @RequestParam int to) {
+
+        Geometry3DDiff.DiffReport report = geometry3DService.diffVersions(objectId, from, to);
+
         if (report == null) {
-            throw new RuntimeException("Cannot compute diff: one or both versions not found");
+            return ResponseEntity.notFound().build();
         }
 
-        GeometryDiffResponse response = new GeometryDiffResponse(objectId, fromVersion, toVersion);
+        GeometryDiffResponse response = new GeometryDiffResponse(objectId, from, to);
         response.geometryName = report.geometryName;
-        response.oldVertexCount = report.oldVertexCount;
-        response.newVertexCount = report.newVertexCount;
-        response.vertexAdditions = report.vertexAdditions;
-        response.vertexModifications = report.vertexModifications;
-        response.vertexDeletions = report.vertexDeletions;
-        response.oldFaceCount = report.oldFaceCount;
-        response.newFaceCount = report.newFaceCount;
-        response.faceAdditions = report.faceAdditions;
-        response.faceDeletions = report.faceDeletions;
 
-        // Convert vertex changes to maps for JSON serialization
-        response.vertexChanges = new ArrayList<>();
-        for (Geometry3DDiff.VertexChange vc : report.vertexChanges) {
-            Map<String, Object> change = new HashMap<>();
-            change.put("index", vc.index);
-            change.put("type", vc.type);
-            if (vc.oldValue != null) {
-                change.put("oldValue", String.format("(%.2f, %.2f, %.2f)", vc.oldValue.getX(), vc.oldValue.getY(), vc.oldValue.getZ()));
-            }
-            if (vc.newValue != null) {
-                change.put("newValue", String.format("(%.2f, %.2f, %.2f)", vc.newValue.getX(), vc.newValue.getY(), vc.newValue.getZ()));
-            }
-            response.vertexChanges.add(change);
-        }
-
-        // Convert face changes to maps for JSON serialization
-        response.faceChanges = new ArrayList<>();
-        for (Geometry3DDiff.FaceChange fc : report.faceChanges) {
-            Map<String, Object> change = new HashMap<>();
-            change.put("index", fc.index);
-            change.put("type", fc.type);
-            if (fc.oldValue != null) {
-                change.put("oldValue", fc.oldValue.getVertexIndices());
-            }
-            if (fc.newValue != null) {
-                change.put("newValue", fc.newValue.getVertexIndices());
-            }
-            response.faceChanges.add(change);
-        }
-
-        return response;
+        return ResponseEntity.ok(response);
     }
 }
-

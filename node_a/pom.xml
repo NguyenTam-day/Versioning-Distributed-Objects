@@ -6,6 +6,7 @@
 
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- Spring Boot parent -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
@@ -13,8 +14,9 @@
         <relativePath/>
     </parent>
 
+    <!-- NODE IDENTITY (QUAN TRỌNG) -->
     <groupId>org.example</groupId>
-    <artifactId>distributed_cad_versioning</artifactId>
+    <artifactId>node_a</artifactId>
     <version>1.0-SNAPSHOT</version>
 
     <properties>
@@ -27,6 +29,19 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- MongoDB -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-mongodb</artifactId>
+        </dependency>
+
+        <!-- Shared module -->
+        <dependency>
+            <groupId>org.example</groupId>
+            <artifactId>shared</artifactId>
+            <version>1.0-SNAPSHOT</version>
         </dependency>
 
         <!-- Lombok -->
@@ -48,6 +63,7 @@
     <build>
         <plugins>
 
+            <!-- Spring Boot plugin -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
