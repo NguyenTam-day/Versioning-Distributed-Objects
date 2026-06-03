@@ -5,16 +5,22 @@ import React, {
 } from "react";
 
 import { useNode } from "../hooks/useNode";
+import VersionDAG from "./VersionDAG";
 
 // ======================================================
 // VersionHistory
 //
-// Dùng api từ NodeContext — không còn apiService.setNode()
+// Dùng api từ NodeContext — hiển thị danh sách các phiên bản
+// và đồ thị DAG (VersionDAG) cho mô hình CAD.
+// Cho phép chọn phiên bản cơ sở (baseVersion).
 // ======================================================
 
 const VersionHistory = ({
     objectId,
     onDiffSelect,
+    onVersionSelect,
+    baseVersion,
+    setBaseVersion,
 }) => {
 
     const { currentNode, api } = useNode();
@@ -28,80 +34,175 @@ const VersionHistory = ({
         to: null,
     });
 
-    // ─── Load versions ────────────────────────────────
+    // ─── Load versions history ─────────────────────────
 
     const loadVersions = useCallback(async () => {
 
-        if (!objectId) return;
+        // QUAN TRỌNG:
+        // objectId rỗng thì clear state luôn
+        if (!objectId) {
+            setVersions([]);
+            return;
+        }
 
         setLoading(true);
         setError("");
 
         try {
 
-            // api đã được gắn sẵn với currentNode — không cần setNode
-            const response = await api.getAllVersions(objectId);
+            // Lấy lịch sử version từ backend
+            const response = await api.getHistory(objectId);
 
-            setVersions(
-                Array.isArray(response.data)
-                    ? response.data
-                    : [response.data]
+            // Parse an toàn
+            const historyList = Array.isArray(response.data?.data)
+                ? response.data.data
+                : [];
+
+            // Sort để DAG render đúng
+            const sortedHistory = [...historyList].sort(
+                (a, b) => a.versionNumber - b.versionNumber
             );
+
+            // QUAN TRỌNG:
+            // replace hoàn toàn state cũ
+            setVersions(sortedHistory);
 
         } catch (err) {
 
             console.error(err);
 
+            // QUAN TRỌNG:
+            // clear stale state khi API fail
+            setVersions([]);
+
             setError(
-                `Failed to load versions: ${err.message}`
+                `Failed to load version history: ${err.response?.data?.message || err.message
+                }`
             );
 
         } finally {
+
             setLoading(false);
+
         }
 
     }, [objectId, api]);
 
-    // Reload khi objectId hoặc node thay đổi
+    // ─── Reload khi objectId đổi ──────────────────────
+
     useEffect(() => {
+
+        // reset stale selections
+        setSelectedVersions({
+            from: null,
+            to: null,
+        });
+
+        // reset stale versions trước khi load mới
+        setVersions([]);
+
         if (objectId) {
             loadVersions();
         }
+
     }, [objectId, loadVersions]);
 
-    // ─── Version selection ────────────────────────────
+    // ─── Version selection for diff ───────────────────
 
     const handleVersionSelect = (type, versionNumber) => {
+
         setSelectedVersions((prev) => ({
             ...prev,
-            [type]: prev[type] === versionNumber ? null : versionNumber,
+            [type]:
+                prev[type] === versionNumber
+                    ? null
+                    : versionNumber,
         }));
+
     };
 
     const handleCompareDiff = () => {
-        if (selectedVersions.from && selectedVersions.to && onDiffSelect) {
-            onDiffSelect(selectedVersions.from, selectedVersions.to);
+
+        if (
+            selectedVersions.from &&
+            selectedVersions.to &&
+            onDiffSelect
+        ) {
+            onDiffSelect(
+                selectedVersions.from,
+                selectedVersions.to
+            );
         }
+
+    };
+
+    // ─── Compute branches for DAG ─────────────────────
+
+    const getBranchesMap = () => {
+
+        const branches = {};
+
+        versions.forEach((v) => {
+
+            if (v.branchName && v.versionName) {
+
+                branches[v.branchName] = v.versionName;
+
+            }
+
+        });
+
+        return branches;
+
     };
 
     // ─── Render ───────────────────────────────────────
 
     if (!objectId) {
+
         return (
             <div className="card">
                 <h2>Version History</h2>
-                <p style={{ color: "#999" }}>Select object ID first</p>
+
+                <p style={{ color: "#999" }}>
+                    Select object ID first
+                </p>
             </div>
         );
+
     }
 
     return (
 
-        <div className="card">
+        <div
+            className="card"
+            style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "24px",
+            }}
+        >
 
-            <h2>
-                Version History ({currentNode})
-            </h2>
+            <div>
+
+                <h2>
+                    Version History & Graph ({currentNode})
+                </h2>
+
+                <p
+                    style={{
+                        color: "var(--color-text-secondary)",
+                        fontSize: "13px",
+                        marginTop: "4px",
+                    }}
+                >
+                    Click a node in the graph or click the
+                    version name in the table to select it
+                    as the active <strong>base version</strong>
+                    for subsequent uploads.
+                </p>
+
+            </div>
 
             {error && (
                 <div className="alert alert-error">
@@ -112,8 +213,11 @@ const VersionHistory = ({
             {loading ? (
 
                 <div className="loading">
+
                     <div className="spinner"></div>
-                    <p>Loading versions...</p>
+
+                    <p>Loading version history...</p>
+
                 </div>
 
             ) : versions.length === 0 ? (
@@ -127,101 +231,309 @@ const VersionHistory = ({
 
                 <>
 
+                    {/* ─── DAG ───────────────────────── */}
+
+                    <div
+                        style={{
+                            background:
+                                "var(--color-canvas-inset)",
+                            padding: "12px",
+                            borderRadius:
+                                "var(--radius-md)",
+                            border:
+                                "1px solid var(--color-border-default)",
+                        }}
+                    >
+
+                        <h3
+                            style={{
+                                fontSize: "14px",
+                                marginBottom: "12px",
+                                display: "flex",
+                                justifyContent:
+                                    "space-between",
+                                alignItems: "center",
+                            }}
+                        >
+
+                            <span>
+                                Interactive Version Graph
+                                (DAG)
+                            </span>
+
+                            {baseVersion && (
+
+                                <span
+                                    style={{
+                                        fontSize: "12px",
+                                        color:
+                                            "var(--color-success-fg)",
+                                    }}
+                                >
+
+                                    Active Base:{" "}
+
+                                    <code
+                                        style={{
+                                            background:
+                                                "rgba(63,185,80,0.1)",
+                                            padding: "2px 6px",
+                                            borderRadius:
+                                                "4px",
+                                        }}
+                                    >
+                                        {baseVersion}
+                                    </code>
+
+                                </span>
+
+                            )}
+
+                        </h3>
+
+                        <VersionDAG
+                            versions={versions}
+                            branches={getBranchesMap()}
+                            currentVersionId={baseVersion}
+                            onVersionSelect={(node) => {
+
+                                const v = node.version;
+
+                                if (v) {
+
+                                    if (setBaseVersion) {
+                                        setBaseVersion(
+                                            v.versionName
+                                        );
+                                    }
+
+                                    if (onVersionSelect) {
+                                        onVersionSelect(
+                                            v.versionNumber
+                                        );
+                                    }
+
+                                }
+
+                            }}
+                            height="350px"
+                        />
+
+                    </div>
+
+                    {/* ─── Table ─────────────────────── */}
+
                     <div style={{ overflowX: "auto" }}>
 
                         <table className="table">
 
                             <thead>
+
                                 <tr>
-                                    <th>Version</th>
-                                    <th>Name</th>
-                                    <th>Format</th>
-                                    <th>Vertices</th>
-                                    <th>Faces</th>
-                                    <th>Action</th>
+                                    <th>Version Name</th>
+                                    <th>Version No.</th>
+                                    <th>Commit Message</th>
+                                    <th>Parent</th>
+                                    <th>Branch</th>
+                                    <th>Site ID</th>
+                                    <th>Sync Status</th>
+                                    <th>Compare</th>
                                 </tr>
+
                             </thead>
 
                             <tbody>
-                                {versions.map((v) => (
 
-                                    <tr key={v.versionNumber}>
+                                {[...versions]
+                                    .reverse()
+                                    .map((v) => {
 
-                                        <td>
-                                            <strong>v{v.versionNumber}</strong>
-                                        </td>
+                                        const isBase =
+                                            baseVersion ===
+                                            v.versionName;
 
-                                        <td>{v.name}</td>
+                                        return (
 
-                                        <td>
-                                            <span className="badge badge-info">
-                                                {v.format}
-                                            </span>
-                                        </td>
+                                            <tr
+                                                key={
+                                                    v.id ||
+                                                    v.versionName
+                                                }
+                                                style={
+                                                    isBase
+                                                        ? {
+                                                            background:
+                                                                "rgba(63,185,80,0.05)",
+                                                        }
+                                                        : {}
+                                                }
+                                            >
 
-                                        <td>{v.vertexCount}</td>
+                                                <td>
 
-                                        <td>{v.faceCount}</td>
+                                                    <button
+                                                        onClick={() => {
 
-                                        <td>
-                                            <div style={{ display: "flex", gap: "0.25rem" }}>
+                                                            if (
+                                                                setBaseVersion
+                                                            ) {
+                                                                setBaseVersion(
+                                                                    v.versionName
+                                                                );
+                                                            }
 
-                                                <button
-                                                    className={`btn ${
-                                                        selectedVersions.from === v.versionNumber
-                                                            ? "btn-danger"
-                                                            : "btn-secondary"
-                                                    }`}
-                                                    style={{ padding: "0.5rem 1rem", fontSize: "0.85rem" }}
-                                                    onClick={() =>
-                                                        handleVersionSelect("from", v.versionNumber)
-                                                    }
-                                                >
-                                                    From
-                                                </button>
+                                                            if (
+                                                                onVersionSelect
+                                                            ) {
+                                                                onVersionSelect(
+                                                                    v.versionNumber
+                                                                );
+                                                            }
 
-                                                <button
-                                                    className={`btn ${
-                                                        selectedVersions.to === v.versionNumber
-                                                            ? "btn-success"
-                                                            : "btn-secondary"
-                                                    }`}
-                                                    style={{ padding: "0.5rem 1rem", fontSize: "0.85rem" }}
-                                                    onClick={() =>
-                                                        handleVersionSelect("to", v.versionNumber)
-                                                    }
-                                                >
-                                                    To
-                                                </button>
+                                                        }}
+                                                        style={{
+                                                            fontFamily:
+                                                                "var(--font-mono)",
+                                                            fontWeight:
+                                                                "bold",
+                                                            color:
+                                                                isBase
+                                                                    ? "var(--color-success-fg)"
+                                                                    : "var(--color-text-link)",
+                                                            background:
+                                                                "none",
+                                                            border:
+                                                                "none",
+                                                            padding:
+                                                                0,
+                                                            cursor:
+                                                                "pointer",
+                                                            textDecoration:
+                                                                "underline",
+                                                            textAlign:
+                                                                "left",
+                                                        }}
+                                                    >
+                                                        {v.versionName}
+                                                    </button>
 
-                                            </div>
-                                        </td>
+                                                </td>
 
-                                    </tr>
+                                                <td>
+                                                    <strong>
+                                                        v{
+                                                            v.versionNumber
+                                                        }
+                                                    </strong>
+                                                </td>
 
-                                ))}
+                                                <td>
+                                                    {v.commitMessage}
+                                                </td>
+
+                                                <td>
+                                                    <code>
+                                                        {v.parentVersion ||
+                                                            "—"}
+                                                    </code>
+                                                </td>
+
+                                                <td>
+                                                    {v.branchName ||
+                                                        "main"}
+                                                </td>
+
+                                                <td>
+                                                    {v.siteId}
+                                                </td>
+
+                                                <td>
+                                                    {v.syncStatus}
+                                                </td>
+
+                                                <td>
+
+                                                    <div
+                                                        style={{
+                                                            display:
+                                                                "flex",
+                                                            gap:
+                                                                "0.25rem",
+                                                        }}
+                                                    >
+
+                                                        <button
+                                                            className={`btn ${selectedVersions.from ===
+                                                                    v.versionNumber
+                                                                    ? "btn-danger"
+                                                                    : "btn-secondary"
+                                                                }`}
+                                                            onClick={() =>
+                                                                handleVersionSelect(
+                                                                    "from",
+                                                                    v.versionNumber
+                                                                )
+                                                            }
+                                                        >
+                                                            From
+                                                        </button>
+
+                                                        <button
+                                                            className={`btn ${selectedVersions.to ===
+                                                                    v.versionNumber
+                                                                    ? "btn-success"
+                                                                    : "btn-secondary"
+                                                                }`}
+                                                            onClick={() =>
+                                                                handleVersionSelect(
+                                                                    "to",
+                                                                    v.versionNumber
+                                                                )
+                                                            }
+                                                        >
+                                                            To
+                                                        </button>
+
+                                                    </div>
+
+                                                </td>
+
+                                            </tr>
+
+                                        );
+
+                                    })}
+
                             </tbody>
 
                         </table>
 
                     </div>
 
-                    {selectedVersions.from && selectedVersions.to && (
-                        <button
-                            className="btn btn-primary"
-                            onClick={handleCompareDiff}
-                            style={{ marginTop: "1rem" }}
-                        >
-                            Compare Versions →
-                        </button>
-                    )}
+                    {selectedVersions.from &&
+                        selectedVersions.to && (
+
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleCompareDiff}
+                                style={{
+                                    marginTop: "1rem",
+                                    alignSelf: "flex-start",
+                                }}
+                            >
+                                Compare Versions →
+                            </button>
+
+                        )}
 
                 </>
 
             )}
 
         </div>
+
     );
+
 };
 
 export default VersionHistory;

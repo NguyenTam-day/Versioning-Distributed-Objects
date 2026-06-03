@@ -46,10 +46,29 @@ export function createNodeApi(nodeName) {
 
         // ─── Geometry APIs ────────────────────────────
 
-        uploadGeometry(objectId, file) {
+        uploadGeometry(arg1, file, parentVersion = null, branchName = null) {
+            let objectId = arg1;
+            let finalFile = file;
+            let finalParent = parentVersion;
+            let finalBranch = branchName;
+
+            // Support object signature: api.uploadGeometry({ objectId, file, parentVersion, branchName })
+            if (typeof arg1 === "object" && arg1 !== null && file === undefined) {
+                objectId = arg1.objectId;
+                finalFile = arg1.file;
+                finalParent = arg1.parentVersion;
+                finalBranch = arg1.branchName;
+            }
+
             const formData = new FormData();
             formData.append("objectId", objectId);
-            formData.append("file", file);
+            formData.append("file", finalFile);
+            if (finalParent) {
+                formData.append("parentVersion", finalParent);
+            }
+            if (finalBranch) {
+                formData.append("branchName", finalBranch);
+            }
 
             return api.post("/geometry/upload", formData, {
                 headers: { "Content-Type": "multipart/form-data" },

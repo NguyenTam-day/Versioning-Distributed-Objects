@@ -41,6 +41,11 @@ public interface Geometry3DRepository
             String objectId,
             int version);
 
+    Optional<Geometry3DModel> findByObjectIdAndVersionAndSiteId(
+            String objectId,
+            int version,
+            String siteId);
+
     /**
      * Get latest version
      */

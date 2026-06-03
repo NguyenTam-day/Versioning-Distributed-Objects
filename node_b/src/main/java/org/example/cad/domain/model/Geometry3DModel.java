@@ -6,6 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import java.util.UUID;
 
 /**
@@ -13,6 +15,15 @@ import java.util.UUID;
  * Stores 3D geometry versions with metadata
  */
 @Document(collection = "geometries")
+@CompoundIndexes({
+        @CompoundIndex(name = "object_version_site_idx",
+                def = "{'objectId':1,'version':1,'siteId':1}",
+                unique = true),
+        @CompoundIndex(name = "object_site_idx",
+                def = "{'objectId':1,'siteId':1}"),
+        @CompoundIndex(name = "timestamp_idx",
+                def = "{'timestamp':1}")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

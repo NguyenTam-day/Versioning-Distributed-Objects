@@ -4,9 +4,9 @@ import React, { useEffect, useRef, useState } from 'react';
  * VersionDAG - Directed Acyclic Graph visualizer for version history
  * 
  * Props:
- *   versions: Array - Version history with parentVersionId
- *   branches: Object - Branch information {name: branchVersionId}
- *   currentVersionId: String - Currently selected version
+ *   versions: Array - Version history with parentVersion or parentVersionId
+ *   branches: Object - Branch information {name: branchVersionName}
+ *   currentVersionId: String - Currently selected version name (baseVersion)
  *   onVersionSelect: Function - Callback when version is clicked
  */
 const VersionDAG = ({ 
@@ -15,13 +15,17 @@ const VersionDAG = ({
   currentVersionId = null,
   onVersionSelect = () => {},
   width = '100%',
-  height = '500px'
+  height = '350px'
 }) => {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [selectedNodeId, setSelectedNodeId] = useState(currentVersionId);
+
+  useEffect(() => {
+    setSelectedNodeId(currentVersionId);
+  }, [currentVersionId]);
 
   useEffect(() => {
     if (!versions.length) return;
@@ -44,11 +48,12 @@ const VersionDAG = ({
     const nodeMap = new Map();
 
     versions.forEach(version => {
-      nodeMap.set(version._id, {
-        id: version._id,
-        label: `v${version.versionNumber}`,
+      const id = version.versionName || version.id || version._id;
+      nodeMap.set(id, {
+        id: id,
+        label: version.versionName || `v${version.versionNumber}`,
         version: version,
-        branch: version.branch || 'main',
+        branch: version.branchName || version.branch || 'main',
         timestamp: version.timestamp
       });
     });
@@ -58,11 +63,11 @@ const VersionDAG = ({
 
   const buildDAGEdges = () => {
     return versions
-      .filter(v => v.parentVersionId)
+      .filter(v => v.parentVersion || v.parentVersionId)
       .map(v => ({
-        source: v.parentVersionId,
-        target: v._id,
-        type: v.hasConflict ? 'conflict' : 'normal'
+        source: v.parentVersion || v.parentVersionId,
+        target: v.versionName || v.id || v._id,
+        type: (v.conflicted || v.hasConflict) ? 'conflict' : 'normal'
       }));
   };
 
@@ -85,7 +90,7 @@ const VersionDAG = ({
     const canvasWidth = canvas.width;
     const canvasHeight = canvas.height;
     const levelWidth = canvasWidth / (levels.size || 1);
-    const nodeRadius = 30;
+    const nodeRadius = 24;
 
     let levelIndex = 0;
     for (const [level, levelNodes] of levels) {
@@ -109,52 +114,54 @@ const VersionDAG = ({
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#f5f5f5';
+    
+    // Clear canvas with GitHub-inspired dark background
+    ctx.fillStyle = '#0d1117'; // --color-canvas-default
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     const positions = calculateNodePositions();
-    const nodeRadius = 30;
+    const nodeRadius = 24;
 
     // Draw edges first
-    ctx.strokeStyle = '#ccc';
-    ctx.lineWidth = 2;
-
     edges.forEach(edge => {
       const source = positions.get(edge.source);
       const target = positions.get(edge.target);
 
       if (source && target) {
         if (edge.type === 'conflict') {
-          ctx.strokeStyle = '#ff6b6b';
+          ctx.strokeStyle = '#f85149'; // --color-danger-fg
           ctx.lineWidth = 3;
         } else {
-          ctx.strokeStyle = '#ccc';
+          ctx.strokeStyle = '#30363d'; // --color-border-default
           ctx.lineWidth = 2;
         }
 
-        // Draw bezier curve
+        // Draw bezier curve for smooth git branching/merging look
         ctx.beginPath();
         ctx.moveTo(source.x, source.y);
         
-        const cp1x = source.x + (target.x - source.x) * 0.3;
+        const cp1x = source.x + (target.x - source.x) * 0.5;
         const cp1y = source.y;
-        const cp2x = source.x + (target.x - source.x) * 0.7;
+        const cp2x = source.x + (target.x - source.x) * 0.5;
         const cp2y = target.y;
 
         ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, target.x, target.y);
         ctx.stroke();
 
-        // Draw arrow
-        const angle = Math.atan2(target.y - source.y, target.x - source.x);
-        const arrowSize = 10;
-        ctx.fillStyle = edge.type === 'conflict' ? '#ff6b6b' : '#999';
+        // Draw directional arrow near target
+        const angle = Math.atan2(target.y - cp2y, target.x - cp2x);
+        const arrowSize = 8;
+        ctx.fillStyle = edge.type === 'conflict' ? '#f85149' : '#8b949e';
 
         ctx.beginPath();
-        ctx.moveTo(target.x, target.y);
-        ctx.lineTo(target.x - arrowSize * Math.cos(angle - Math.PI / 6), 
-                   target.y - arrowSize * Math.sin(angle - Math.PI / 6));
-        ctx.lineTo(target.x - arrowSize * Math.cos(angle + Math.PI / 6), 
-                   target.y - arrowSize * Math.sin(angle + Math.PI / 6));
+        // Shift arrow slightly back from node circumference
+        const arrowX = target.x - nodeRadius * Math.cos(angle);
+        const arrowY = target.y - nodeRadius * Math.sin(angle);
+        ctx.moveTo(arrowX, arrowY);
+        ctx.lineTo(arrowX - arrowSize * Math.cos(angle - Math.PI / 6), 
+                   arrowY - arrowSize * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(arrowX - arrowSize * Math.cos(angle + Math.PI / 6), 
+                   arrowY - arrowSize * Math.sin(angle + Math.PI / 6));
         ctx.closePath();
         ctx.fill();
       }
@@ -166,80 +173,76 @@ const VersionDAG = ({
       if (!pos) return;
 
       const isSelected = selectedNodeId === node.id;
-      const isCurrent = currentVersionId === node.id;
+      const isConflicted = node.version.conflicted || node.version.hasConflict;
 
-      // Draw node circle
       ctx.beginPath();
       ctx.arc(pos.x, pos.y, nodeRadius, 0, 2 * Math.PI);
 
       if (isSelected) {
-        ctx.fillStyle = '#4CAF50';
+        ctx.fillStyle = '#238636'; // --color-success-emphasis
         ctx.lineWidth = 3;
-        ctx.strokeStyle = '#2e7d32';
-      } else if (isCurrent) {
-        ctx.fillStyle = '#2196F3';
+        ctx.strokeStyle = '#3fb950'; // --color-success-fg
+      } else if (isConflicted) {
+        ctx.fillStyle = '#da3633'; // --color-danger-emphasis
         ctx.lineWidth = 2;
-        ctx.strokeStyle = '#1565c0';
-      } else if (node.version.hasConflict) {
-        ctx.fillStyle = '#ff9800';
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = '#f57c00';
+        ctx.strokeStyle = '#f85149'; // --color-danger-fg
       } else {
-        ctx.fillStyle = '#e0e0e0';
+        // Normal node
+        ctx.fillStyle = '#21262d'; // --color-btn-bg
         ctx.lineWidth = 2;
-        ctx.strokeStyle = '#999';
+        ctx.strokeStyle = '#30363d'; // --color-border-default
       }
 
       ctx.fill();
       ctx.stroke();
 
-      // Draw version label
-      ctx.fillStyle = isSelected || isCurrent ? '#fff' : '#333';
-      ctx.font = 'bold 12px Arial';
+      // Draw version label inside node
+      ctx.fillStyle = isSelected ? '#ffffff' : '#e6edf3';
+      ctx.font = 'bold 10px ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(node.label, pos.x, pos.y - 5);
+      ctx.fillText(node.label, pos.x, pos.y - 4);
 
-      // Draw branch label if not main
-      if (node.branch && node.branch !== 'main') {
-        ctx.font = '10px Arial';
-        ctx.fillStyle = '#666';
-        ctx.fillText(node.branch, pos.x, pos.y + 10);
-      }
+      // Draw branch label below node
+      ctx.font = '9px ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace';
+      ctx.fillStyle = isSelected ? '#3fb950' : (isConflicted ? '#f85149' : '#8b949e');
+      ctx.fillText(node.branch, pos.x, pos.y + 8);
     });
 
-    // Draw legend
+    // Draw Legend
     drawLegend(ctx);
   };
 
   const drawLegend = (ctx) => {
-    const legendX = 10;
-    const legendY = 10;
-    const itemHeight = 20;
+    const legendX = 15;
+    const legendY = 15;
+    const itemHeight = 22;
 
-    ctx.font = '12px Arial';
-    ctx.fillStyle = '#333';
+    ctx.font = '11px ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
 
-    // Legend items
     const items = [
-      { color: '#4CAF50', label: 'Selected' },
-      { color: '#2196F3', label: 'Current' },
-      { color: '#ff9800', label: 'Conflict' },
-      { color: '#e0e0e0', label: 'Normal' }
+      { color: '#238636', stroke: '#3fb950', label: 'Selected Base' },
+      { color: '#da3633', stroke: '#f85149', label: 'Conflict Version' },
+      { color: '#21262d', stroke: '#30363d', label: 'Normal Version' }
     ];
 
     items.forEach((item, index) => {
       const y = legendY + index * itemHeight;
 
+      // Draw color circle indicator
+      ctx.beginPath();
+      ctx.arc(legendX + 6, y + 6, 6, 0, 2 * Math.PI);
       ctx.fillStyle = item.color;
-      ctx.fillRect(legendX, y, 10, 10);
+      ctx.fill();
+      ctx.strokeStyle = item.stroke;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
 
-      ctx.strokeStyle = '#999';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(legendX, y, 10, 10);
-
-      ctx.fillStyle = '#333';
-      ctx.fillText(item.label, legendX + 20, y + 8);
+      // Draw text
+      ctx.fillStyle = '#8b949e'; // --color-text-secondary
+      ctx.fillText(item.label, legendX + 20, y + 6);
     });
   };
 
@@ -250,7 +253,7 @@ const VersionDAG = ({
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const nodeRadius = 30;
+    const nodeRadius = 24;
 
     const positions = calculateNodePositions();
 
@@ -274,12 +277,29 @@ const VersionDAG = ({
     setSelectedNodeId(currentVersionId);
   };
 
+  // Adjust canvas resolution dynamically on container mount
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !containerRef.current) return;
+    
+    const resizeCanvas = () => {
+      const rect = containerRef.current.parentElement.getBoundingClientRect();
+      canvas.width = rect.width || 800;
+      canvas.height = parseInt(height, 10) || 350;
+      if (nodes.length) {
+        drawDAG();
+      }
+    };
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    return () => window.removeEventListener('resize', resizeCanvas);
+  }, [nodes]);
+
   return (
-    <div style={{ width, height, position: 'relative', border: '1px solid #ddd', borderRadius: '4px', overflow: 'hidden' }}>
+    <div style={{ width, height, position: 'relative', border: '1px solid #30363d', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
       <canvas
         ref={canvasRef}
-        width={containerRef.current?.offsetWidth || 800}
-        height={containerRef.current?.offsetHeight || 500}
         onClick={handleCanvasClick}
         style={{
           display: 'block',
@@ -297,21 +317,20 @@ const VersionDAG = ({
       }}>
         <button
           onClick={resetSelection}
+          className="btn btn-secondary"
           style={{
-            padding: '8px 12px',
-            background: '#2196F3',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '12px'
+            padding: '4px 10px',
+            fontSize: '11px',
+            background: 'var(--color-btn-bg)',
+            color: 'var(--color-text-primary)',
+            border: '1px solid var(--color-border-default)'
           }}
         >
           Reset
         </button>
       </div>
 
-      <div ref={containerRef} style={{ position: 'absolute', width: 0, height: 0 }} />
+      <div ref={containerRef} style={{ position: 'absolute', width: '100%', height: '100%', pointerEvents: 'none', zIndex: -1 }} />
     </div>
   );
 };

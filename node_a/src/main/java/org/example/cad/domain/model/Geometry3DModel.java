@@ -30,9 +30,9 @@ import java.util.UUID;
          * Prevent duplicate versions
          * for same object
          */
-        @CompoundIndex(name = "object_version_idx",
+        @CompoundIndex(name = "object_version_site_idx",
 
-                def = "{'objectId':1,'version':1}",
+                def = "{'objectId':1,'version':1,'siteId':1}",
 
                 unique = true),
 

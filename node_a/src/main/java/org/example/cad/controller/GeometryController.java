@@ -2,7 +2,7 @@ package org.example.cad.controller;
 
 import org.example.cad.dto.response.GeometryDiffResponse;
 import org.example.cad.dto.response.GeometryVersionResponse;
-import org.example.cad.service.geometry.Geometry3DService;
+import org.example.cad.service.Geometry3DService;
 
 import org.example.dv.Geometry3D;
 import org.example.dv.Geometry3DDiff;
@@ -37,7 +37,11 @@ public class GeometryController {
 
                         @RequestParam("objectId") String objectId,
 
-                        @RequestParam("file") MultipartFile file) {
+                        @RequestParam("file") MultipartFile file,
+
+                        @RequestParam(value = "parentVersion", required = false) String parentVersion,
+
+                        @RequestParam(value = "branchName", required = false) String branchName) {
 
                 try {
 
@@ -62,7 +66,11 @@ public class GeometryController {
 
                                                         file.getInputStream(),
 
-                                                        file.getOriginalFilename());
+                                                        file.getOriginalFilename(),
+
+                                                        parentVersion,
+
+                                                        branchName);
 
                         /**
                          * Latest version

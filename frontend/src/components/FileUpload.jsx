@@ -1,6 +1,7 @@
 import React, {
     useState,
     useRef,
+    useEffect,
 } from "react";
 
 import { useNode } from "../hooks/useNode";
@@ -12,18 +13,51 @@ import { useNode } from "../hooks/useNode";
 // Node được xác định 1 lần duy nhất từ NodeProvider cha
 // ======================================================
 
-const FileUpload = ({ onUploadSuccess }) => {
+const FileUpload = ({
+    onUploadSuccess,
+    objectIdProp = "",
+    baseVersion = null,
+    setBaseVersion,
+    selectedBranch = "main",
+    setSelectedBranch,
+}) => {
 
     const { currentNode, api } = useNode();
 
     const [file, setFile] = useState(null);
-    const [objectId, setObjectId] = useState("");
+    const [objectId, setObjectId] = useState(objectIdProp || "");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+    const [availableBranches, setAvailableBranches] = useState(["main"]);
 
     const fileInputRef = useRef(null);
     const dropZoneRef = useRef(null);
+
+    // Sync objectId with objectIdProp from parent
+    useEffect(() => {
+        if (objectIdProp) {
+            setObjectId(objectIdProp);
+        }
+    }, [objectIdProp]);
+
+    // Load available branches for autocomplete
+    useEffect(() => {
+        const loadBranches = async () => {
+            if (!objectId || !api) return;
+            try {
+                const response = await api.getBranches(objectId);
+                const resData = response.data;
+                const list = resData?.data || (Array.isArray(resData) ? resData : []);
+                if (Array.isArray(list)) {
+                    setAvailableBranches(list);
+                }
+            } catch (err) {
+                console.error("Failed to load branches in FileUpload:", err);
+            }
+        };
+        loadBranches();
+    }, [objectId, api]);
 
     // ─── Drag & Drop handlers ─────────────────────────
 
@@ -67,17 +101,24 @@ const FileUpload = ({ onUploadSuccess }) => {
         setSuccess("");
 
         try {
-
-            // api instance được tạo sẵn cho currentNode
-            // không cần setNode trước khi gọi
-            const response = await api.uploadGeometry(objectId, file);
+            // Gửi parentVersion (baseVersion) và branchName (selectedBranch) theo yêu cầu của user
+            const response = await api.uploadGeometry({
+                objectId,
+                file,
+                parentVersion: baseVersion,
+                branchName: selectedBranch
+            });
 
             setSuccess(
                 `✓ File uploaded successfully to ${currentNode}! Version: ${response.data.versionNumber}`
             );
 
             setFile(null);
-            setObjectId("");
+            
+            // Clear baseVersion after success (optional/good practice in CAD workflow)
+            if (setBaseVersion) {
+                setBaseVersion(null);
+            }
 
             if (fileInputRef.current) {
                 fileInputRef.current.value = "";
@@ -124,9 +165,7 @@ const FileUpload = ({ onUploadSuccess }) => {
             )}
 
             <div className="form-group">
-
                 <label>Object ID</label>
-
                 <input
                     type="text"
                     placeholder="cube-model"
@@ -134,7 +173,39 @@ const FileUpload = ({ onUploadSuccess }) => {
                     onChange={(e) => setObjectId(e.target.value)}
                     disabled={loading}
                 />
+            </div>
 
+            <div className="form-group" style={{ display: "flex", gap: "16px", marginTop: "1rem" }}>
+                <div style={{ flex: 1 }}>
+                    <label>Target Branch</label>
+                    <input
+                        type="text"
+                        placeholder="main"
+                        value={selectedBranch || ""}
+                        onChange={(e) => {
+                            if (setSelectedBranch) setSelectedBranch(e.target.value);
+                        }}
+                        disabled={loading}
+                        list="available-branches"
+                    />
+                    <datalist id="available-branches">
+                        {availableBranches.map((br) => (
+                            <option key={br} value={br} />
+                        ))}
+                    </datalist>
+                </div>
+                <div style={{ flex: 1 }}>
+                    <label>Parent Version (Base)</label>
+                    <input
+                        type="text"
+                        placeholder="e.g., v1_A (empty for first)"
+                        value={baseVersion || ""}
+                        onChange={(e) => {
+                            if (setBaseVersion) setBaseVersion(e.target.value || null);
+                        }}
+                        disabled={loading}
+                    />
+                </div>
             </div>
 
             <div
@@ -144,6 +215,7 @@ const FileUpload = ({ onUploadSuccess }) => {
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
+                style={{ marginTop: "1.5rem" }}
             >
 
                 <p>Drag & Drop CAD File</p>
@@ -174,7 +246,7 @@ const FileUpload = ({ onUploadSuccess }) => {
                 className="btn btn-primary"
                 onClick={handleUpload}
                 disabled={loading || !file || !objectId.trim()}
-                style={{ marginTop: "1rem" }}
+                style={{ marginTop: "1.5rem", width: "100%" }}
             >
                 {loading
                     ? "⏳ Uploading..."

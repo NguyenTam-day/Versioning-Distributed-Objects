@@ -2,8 +2,7 @@ package org.example.cad.controller;
 
 import org.example.cad.dto.response.GeometryVersionResponse;
 import org.example.cad.dto.response.GeometryDiffResponse;
-import org.example.cad.dto.common.ApiResponse;
-import org.example.cad.service.geometry.Geometry3DService;
+import org.example.cad.service.Geometry3DService;
 import org.example.dv.Geometry3D;
 import org.example.dv.Geometry3DDiff;
 
@@ -40,7 +39,9 @@ public class GeometryController {
     @PostMapping("/upload")
     public ResponseEntity<GeometryVersionResponse> uploadGeometry(
             @RequestParam("objectId") String objectId,
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "parentVersion", required = false) String parentVersion,
+            @RequestParam(value = "branchName", required = false) String branchName) {
 
         try {
             if (file == null || file.isEmpty()) {
@@ -50,8 +51,9 @@ public class GeometryController {
             geometry3DService.uploadGeometry(
                     objectId,
                     file.getInputStream(),
-                    file.getOriginalFilename()
-            );
+                    file.getOriginalFilename(),
+                    parentVersion,
+                    branchName);
 
             int versionCount = geometry3DService.getVersionCount(objectId);
 
@@ -66,8 +68,7 @@ public class GeometryController {
                     geom.getFormat(),
                     geom.getVertices().size(),
                     geom.getFaces().size(),
-                    json
-            );
+                    json);
 
             return ResponseEntity.ok(response);
 
@@ -94,8 +95,7 @@ public class GeometryController {
                     objectId, i + 1,
                     geom.getName(), geom.getFormat(),
                     geom.getVertices().size(), geom.getFaces().size(),
-                    json
-            ));
+                    json));
         }
 
         return ResponseEntity.ok(responses);
@@ -121,8 +121,7 @@ public class GeometryController {
                 objectId, versionNumber,
                 geom.getName(), geom.getFormat(),
                 geom.getVertices().size(), geom.getFaces().size(),
-                json
-        ));
+                json));
     }
 
     /**

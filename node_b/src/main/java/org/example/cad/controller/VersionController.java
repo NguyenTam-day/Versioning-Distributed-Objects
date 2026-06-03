@@ -5,7 +5,7 @@ import org.example.cad.dto.response.VersionResponse;
 import org.example.cad.dto.common.ApiResponse;
 import org.example.cad.domain.model.VersionDoc;
 import org.example.cad.repository.VersionRepository;
-import org.example.cad.service.version.VersionService;
+import org.example.cad.service.VersionService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import org.example.cad.service.sync.SyncService;
+import org.example.cad.service.SyncService;
 
 @RestController
 @RequestMapping("/api/version")
@@ -27,7 +27,8 @@ public class VersionController {
     @Value("${app.site-id}")
     private String currentSiteId;
 
-    public VersionController(VersionRepository versionRepository, VersionService versionService, SyncService syncService) {
+    public VersionController(VersionRepository versionRepository, VersionService versionService,
+            SyncService syncService) {
         this.versionRepository = versionRepository;
         this.versionService = versionService;
         this.syncService = syncService;
@@ -43,8 +44,10 @@ public class VersionController {
             String targetBranch = branchName;
 
             if (body != null) {
-                if (body.containsKey("modelId")) targetModelId = body.get("modelId");
-                if (body.containsKey("branchName")) targetBranch = body.get("branchName");
+                if (body.containsKey("modelId"))
+                    targetModelId = body.get("modelId");
+                if (body.containsKey("branchName"))
+                    targetBranch = body.get("branchName");
             }
 
             if (targetModelId == null || targetModelId.isEmpty()) {
@@ -88,8 +91,7 @@ public class VersionController {
                         branchName,
                         siteId,
                         null,
-                        true
-                );
+                        true);
             }
 
             if (req.getModelId() == null || req.getModelId().isEmpty()) {
@@ -100,7 +102,7 @@ public class VersionController {
             VersionResponse response = mapToResponse(saved);
 
             try {
-                syncService.syncVersionToPeers(saved);
+                syncService.syncVersionToPeersAsync(saved);
             } catch (Exception e) {
                 // Non-blocking sync
             }
@@ -119,7 +121,7 @@ public class VersionController {
             VersionResponse response = mapToResponse(saved);
 
             try {
-                syncService.syncVersionToPeers(saved);
+                syncService.syncVersionToPeersAsync(saved);
             } catch (Exception e) {
                 // Non-blocking sync
             }
@@ -167,7 +169,7 @@ public class VersionController {
         response.modelId = doc.getModelId();
         response.versionNumber = doc.getVersionNumber();
         response.commitMessage = doc.getCommitMessage();
-        response.timestamp = new Date(doc.getTimestamp());
+        response.timestamp = Date.from(doc.getTimestamp());
         response.author = doc.getAuthor();
         response.geometryData = doc.getGeometryData();
         response.branchName = doc.getBranchName();
@@ -175,6 +177,8 @@ public class VersionController {
         response.fullSnapshot = doc.isFullSnapshot();
         response.siteId = doc.getSiteId();
         response.syncStatus = doc.getSyncStatus();
+        response.versionName = doc.getVersionName();
+        response.conflicted = doc.getBranchName() != null && doc.getBranchName().startsWith("conflict/");
         return response;
     }
 }
