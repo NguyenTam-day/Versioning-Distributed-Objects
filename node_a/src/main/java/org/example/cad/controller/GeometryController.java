@@ -1,5 +1,6 @@
 package org.example.cad.controller;
 
+import org.example.cad.domain.model.VersionDoc;
 import org.example.cad.dto.response.GeometryDiffResponse;
 import org.example.cad.dto.response.GeometryVersionResponse;
 import org.example.cad.service.Geometry3DService;
@@ -59,30 +60,21 @@ public class GeometryController {
                         /**
                          * Upload + store
                          */
-                        geometry3DService
-                                        .uploadGeometry(
+                        VersionDoc versionDoc =
+                                        geometry3DService
+                                                        .uploadGeometry(
+                                                                        objectId,
+                                                                        file.getInputStream(),
+                                                                        file.getOriginalFilename(),
+                                                                        parentVersion,
+                                                                        branchName);
 
-                                                        objectId,
-
-                                                        file.getInputStream(),
-
-                                                        file.getOriginalFilename(),
-
-                                                        parentVersion,
-
-                                                        branchName);
-
-                        /**
-                         * Latest version
-                         */
-                        int versionCount = geometry3DService
-                                        .getVersionCount(
-                                                        objectId);
+                        int newVersionNumber = versionDoc.getVersionNumber();
 
                         Geometry3D geometry = geometry3DService
                                         .getGeometry(
                                                         objectId,
-                                                        versionCount);
+                                                        newVersionNumber);
 
                         if (geometry == null) {
 
@@ -94,7 +86,7 @@ public class GeometryController {
                         String json = geometry3DService
                                         .getGeometryAsJson(
                                                         objectId,
-                                                        versionCount);
+                                                        newVersionNumber);
 
                         /**
                          * Response DTO
@@ -103,7 +95,7 @@ public class GeometryController {
 
                                         objectId,
 
-                                        versionCount,
+                                        newVersionNumber,
 
                                         geometry.getName(),
 

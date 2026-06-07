@@ -86,7 +86,7 @@ public class Geometry3DService {
         /**
          * Upload geometry
          */
-        public String uploadGeometry(
+        public VersionDoc uploadGeometry(
                         String objectId,
                         InputStream inputStream,
                         String filename,
@@ -97,89 +97,78 @@ public class Geometry3DService {
                                 inputStream,
                                 filename);
 
-                Geometry3D latestGeometry = getLatestVersion(objectId);
-                if (latestGeometry != null) {
-                        Geometry3DDiff.DiffReport diffReport = Geometry3DDiff.diff(latestGeometry, geometry);
-                        boolean hasChanges = diffReport.vertexModifications > 0 || diffReport.vertexAdditions > 0
-                                        || diffReport.vertexDeletions > 0
-                                        || diffReport.faceModifications > 0 || diffReport.faceAdditions > 0
-                                        || diffReport.faceDeletions > 0;
-                        if (!hasChanges) {
-                                throw new IllegalArgumentException("Geometry data has not changed. Upload aborted.");
-                        }
-                }
+                 Geometry3D latestGeometry = null;
+                 if (parentVersion != null && !parentVersion.isEmpty()) {
+                         Optional<VersionDoc> parentDocOpt = versionRepository.findByModelIdAndVersionName(objectId, parentVersion);
+                         if (parentDocOpt.isPresent()) {
+                                 latestGeometry = versionService.reconstructGeometry(parentDocOpt.get());
+                         }
+                 }
+                 if (latestGeometry == null) {
+                         latestGeometry = getLatestVersion(objectId);
+                 }
 
-                /**
-                 * Count current versions
-                 */
-                int newVersion = (int) geometry3DRepository
-                                .countByObjectId(
-                                                objectId)
-                                + 1;
+                 if (latestGeometry != null) {
+                         Geometry3DDiff.DiffReport diffReport = Geometry3DDiff.diff(latestGeometry, geometry);
+                         boolean hasChanges = diffReport.vertexModifications > 0 || diffReport.vertexAdditions > 0
+                                         || diffReport.vertexDeletions > 0
+                                         || diffReport.faceModifications > 0 || diffReport.faceAdditions > 0
+                                         || diffReport.faceDeletions > 0;
+                         if (!hasChanges) {
+                                 throw new IllegalArgumentException("Geometry data has not changed. Upload aborted.");
+                         }
+                 }
 
-                /**
-                 * Set metadata
-                 */
-                geometry.setVersion(
-                                newVersion);
+                 VersionDoc versionDoc;
+                 try {
+                         // Create corresponding VersionDoc using VersionService first to generate the unique sequential versionNumber
+                         CreateVersionRequest req = new CreateVersionRequest();
+                         req.setModelId(objectId);
+                         req.setCommitMessage("Upload file: " + filename);
+                         req.setGeometryData(gson.toJson(geometry));
+                         req.setAuthor("system");
+                         req.setBranchName(branchName != null && !branchName.isEmpty() ? branchName : "main");
+                         req.setParentVersion(parentVersion);
 
-                geometry.setSiteId(
-                                currentSiteId);
+                         versionDoc = versionService.createVersion(req, currentSiteId);
+                         int newVersion = versionDoc.getVersionNumber();
 
-                geometry.setTimestamp(
-                                System.currentTimeMillis());
+                         /**
+                          * Set metadata on geometry
+                          */
+                         geometry.setVersion(newVersion);
+                         geometry.setSiteId(currentSiteId);
+                         geometry.setTimestamp(versionDoc.getTimestamp().toEpochMilli());
 
-                /**
-                 * Convert to DB model
-                 */
-                Geometry3DModel model = Geometry3DModel.createNew(
+                         /**
+                          * Convert and save to DB model
+                          */
+                         Geometry3DModel model = Geometry3DModel.createNew(
+                                         objectId,
+                                         newVersion,
+                                         geometry.getName(),
+                                         geometry.getFormat(),
+                                         currentSiteId);
+                         model.setTimestamp(versionDoc.getTimestamp().toEpochMilli());
 
-                                objectId,
+                         geometry3DRepository.save(model);
 
-                                newVersion,
+                         // Asynchronously sync version to peers
+                         try {
+                                 syncService.syncVersionToPeersAsync(versionDoc);
+                         } catch (Exception e) {
+                                 // Non-blocking sync
+                         }
 
-                                geometry.getName(),
+                 } catch (DuplicateKeyException e) {
+                         throw new RuntimeException("Version conflict detected");
+                 }
 
-                                geometry.getFormat(),
-
-                                currentSiteId);
-
-
-                try {
-
-                        geometry3DRepository
-                                        .save(model);
-
-                        // Create corresponding VersionDoc using VersionService to trigger snapshot/delta logic
-                        CreateVersionRequest req = new CreateVersionRequest();
-                        req.setModelId(objectId);
-                        req.setCommitMessage("Upload file: " + filename);
-                        req.setGeometryData(gson.toJson(geometry));
-                        req.setAuthor("system");
-                        req.setBranchName(branchName != null && !branchName.isEmpty() ? branchName : "main");
-                        req.setParentVersion(parentVersion);
-
-                        VersionDoc versionDoc = versionService.createVersion(req, currentSiteId);
-
-                        // Asynchronously sync version to peers
-                        try {
-                                syncService.syncVersionToPeersAsync(versionDoc);
-                        } catch (Exception e) {
-                                // Non-blocking sync
-                        }
-
-                } catch (DuplicateKeyException e) {
-
-                        throw new RuntimeException(
-                                        "Version conflict detected");
-                }
-
-                return gson.toJson(
-                                geometry);
+                 return versionDoc;
         }
 
         /**
-         * Get geometry by version — read from VersionDoc.geometryData
+         * Get geometry by version — read and reconstruct from VersionDoc delta chain
          */
         public Geometry3D getGeometry(
                         String objectId,
@@ -192,13 +181,11 @@ public class Geometry3DService {
                         return null;
                 }
 
-                return gson.fromJson(
-                                vd.get().getGeometryData(),
-                                Geometry3D.class);
+                return versionService.reconstructGeometry(vd.get());
         }
 
         /**
-         * Get all versions — read from VersionDoc
+         * Get all versions — read and reconstruct from VersionDoc delta chain
          */
         public List<Geometry3D> getAllVersions(
                         String objectId) {
@@ -210,7 +197,10 @@ public class Geometry3DService {
 
                 for (VersionDoc vd : versionDocs) {
                         if (vd.getGeometryData() != null) {
-                                result.add(gson.fromJson(vd.getGeometryData(), Geometry3D.class));
+                                Geometry3D geom = versionService.reconstructGeometry(vd);
+                                if (geom != null) {
+                                        result.add(geom);
+                                }
                         }
                 }
 
@@ -244,7 +234,7 @@ public class Geometry3DService {
         }
 
         /**
-         * Get geometry JSON from VersionDoc
+         * Get geometry JSON from VersionDoc — always returns full reconstructed geometry
          */
         public String getGeometryAsJson(
                         String objectId,
@@ -253,7 +243,10 @@ public class Geometry3DService {
                 Optional<VersionDoc> vd = versionRepository
                                 .findByModelIdAndVersionNumber(objectId, version);
 
-                return vd.map(VersionDoc::getGeometryData).orElse(null);
+                if (vd.isEmpty()) return null;
+
+                Geometry3D geo = versionService.reconstructGeometry(vd.get());
+                return geo != null ? gson.toJson(geo) : null;
         }
 
         /**

@@ -1,5 +1,6 @@
 package org.example.cad.controller;
 
+import org.example.cad.domain.model.VersionDoc;
 import org.example.cad.dto.response.GeometryVersionResponse;
 import org.example.cad.dto.response.GeometryDiffResponse;
 import org.example.cad.service.Geometry3DService;
@@ -48,22 +49,26 @@ public class GeometryController {
                 return ResponseEntity.status(400).build();
             }
 
-            geometry3DService.uploadGeometry(
+            VersionDoc versionDoc = geometry3DService.uploadGeometry(
                     objectId,
                     file.getInputStream(),
                     file.getOriginalFilename(),
                     parentVersion,
                     branchName);
 
-            int versionCount = geometry3DService.getVersionCount(objectId);
+            int newVersionNumber = versionDoc.getVersionNumber();
 
-            Geometry3D geom = geometry3DService.getGeometry(objectId, versionCount);
+            Geometry3D geom = geometry3DService.getGeometry(objectId, newVersionNumber);
 
-            String json = geometry3DService.getGeometryAsJson(objectId, versionCount);
+            if (geom == null) {
+                return ResponseEntity.internalServerError().build();
+            }
+
+            String json = geometry3DService.getGeometryAsJson(objectId, newVersionNumber);
 
             GeometryVersionResponse response = new GeometryVersionResponse(
                     objectId,
-                    versionCount,
+                    newVersionNumber,
                     geom.getName(),
                     geom.getFormat(),
                     geom.getVertices().size(),

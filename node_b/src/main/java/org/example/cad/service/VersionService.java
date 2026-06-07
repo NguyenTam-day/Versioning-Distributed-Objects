@@ -79,50 +79,44 @@ public class VersionService {
         // Get latest version safely
         VersionDoc currentHead = getLatestVersion(request.getModelId());
 
-        // ---------------------------------------------------------------------
-        // Validate geometry changes
-        // ---------------------------------------------------------------------
-
-        if (currentHead != null
-                && request.getGeometryData() != null
-                && !request.getGeometryData().isEmpty()
-                && currentHead.getGeometryData() != null
-                && !currentHead.getGeometryData().isEmpty()) {
-
+        // Validate geometry changes vs the correct base version
+        if (request.getGeometryData() != null && !request.getGeometryData().isEmpty()) {
             try {
+                Geometry3D newGeo = gson.fromJson(request.getGeometryData(), Geometry3D.class);
 
-                com.google.gson.Gson gson = new com.google.gson.Gson();
+                // Determine the base version to compare against:
+                // use explicit parentVersion if given, else fall back to currentHead
+                Geometry3D baseGeo = null;
+                String explicitParent = request.getParentVersion();
+                if (explicitParent != null && !explicitParent.isEmpty()) {
+                    Optional<VersionDoc> parentDocOpt = existingVersions.stream()
+                            .filter(v -> explicitParent.equals(v.getVersionName()))
+                            .findFirst();
+                    if (parentDocOpt.isPresent()) {
+                        baseGeo = reconstructGeometry(parentDocOpt.get());
+                    }
+                }
+                if (baseGeo == null && currentHead != null) {
+                    baseGeo = reconstructGeometry(currentHead);
+                }
 
-                org.example.dv.Geometry3D newGeo = gson.fromJson(
-                        request.getGeometryData(),
-                        org.example.dv.Geometry3D.class);
-
-                org.example.dv.Geometry3D oldGeo = gson.fromJson(
-                        currentHead.getGeometryData(),
-                        org.example.dv.Geometry3D.class);
-
-                if (newGeo != null && oldGeo != null) {
-
-                    org.example.dv.Geometry3DDiff.DiffReport diffReport = org.example.dv.Geometry3DDiff.diff(oldGeo,
-                            newGeo);
-
+                if (newGeo != null && baseGeo != null) {
+                    Geometry3DDiff.DiffReport diffReport = Geometry3DDiff.diff(baseGeo, newGeo);
                     boolean hasChanges = diffReport.vertexModifications > 0
                             || diffReport.vertexAdditions > 0
                             || diffReport.vertexDeletions > 0
                             || diffReport.faceModifications > 0
                             || diffReport.faceAdditions > 0
                             || diffReport.faceDeletions > 0;
-
                     if (!hasChanges) {
                         throw new IllegalArgumentException(
                                 "Geometry data has not changed. Version creation aborted.");
                     }
                 }
-
             } catch (IllegalArgumentException e) {
                 throw e;
             } catch (Exception e) {
-                // Ignore JSON parse errors and continue
+                // Ignore parse errors and continue
             }
         }
 
@@ -149,23 +143,13 @@ public class VersionService {
         }
 
         // ---------------------------------------------------------------------
-        // Calculate next version number (relative to parentVersion)
+        // Calculate next version number (monotonically increasing)
         // ---------------------------------------------------------------------
 
-        int nextVersionNumber = 1;
-        if (parentVersion != null && !parentVersion.isEmpty()) {
-            final String targetParent = parentVersion;
-            Optional<VersionDoc> parentDocOpt = existingVersions.stream()
-                    .filter(v -> targetParent.equals(v.getVersionName()))
-                    .findFirst();
-            if (parentDocOpt.isPresent()) {
-                nextVersionNumber = parentDocOpt.get().getVersionNumber() + 1;
-            } else if (currentHead != null) {
-                nextVersionNumber = currentHead.getVersionNumber() + 1;
-            }
-        } else if (currentHead != null) {
-            nextVersionNumber = currentHead.getVersionNumber() + 1;
-        }
+        int nextVersionNumber = existingVersions.stream()
+                .mapToInt(VersionDoc::getVersionNumber)
+                .max()
+                .orElse(0) + 1;
 
         // ---------------------------------------------------------------------
         // Default branch
@@ -188,13 +172,27 @@ public class VersionService {
 
         // Compute storage payload
         String storageData = request.getGeometryData();
-        if (!isSnapshot && currentHead != null
-                && currentHead.getGeometryData() != null
-                && !currentHead.getGeometryData().isEmpty()
-                && request.getGeometryData() != null
-                && !request.getGeometryData().isEmpty()) {
-            // For delta versions, resolve the previous snapshot geometry to compute diff
-            String baseGeometryJson = resolveSnapshotGeometry(request.getModelId(), currentHead, existingVersions);
+        if (!isSnapshot && request.getGeometryData() != null && !request.getGeometryData().isEmpty()) {
+            String baseGeometryJson = null;
+            if (parentVersion != null && !parentVersion.isEmpty()) {
+                final String targetParent = parentVersion;
+                Optional<VersionDoc> parentDocOpt = existingVersions.stream()
+                        .filter(v -> targetParent.equals(v.getVersionName()))
+                        .findFirst();
+                if (parentDocOpt.isPresent()) {
+                    Geometry3D parentGeo = reconstructGeometry(parentDocOpt.get());
+                    if (parentGeo != null) {
+                        baseGeometryJson = gson.toJson(parentGeo);
+                    }
+                }
+            }
+            if (baseGeometryJson == null && currentHead != null) {
+                Geometry3D parentGeo = reconstructGeometry(currentHead);
+                if (parentGeo != null) {
+                    baseGeometryJson = gson.toJson(parentGeo);
+                }
+            }
+
             if (baseGeometryJson != null) {
                 try {
                     Geometry3D oldGeo = gson.fromJson(baseGeometryJson, Geometry3D.class);
@@ -300,25 +298,6 @@ public class VersionService {
      * Walk backwards from currentHead to find the nearest full-snapshot VersionDoc
      * and return its geometryData (the full geometry JSON to base the diff on).
      */
-    private String resolveSnapshotGeometry(String modelId, VersionDoc currentHead, List<VersionDoc> allVersions) {
-        if (currentHead.isFullSnapshot()) {
-            return currentHead.getGeometryData();
-        }
-        // Walk backwards through version numbers to find the closest snapshot
-        int searchVersion = currentHead.getVersionNumber() - 1;
-        while (searchVersion >= 1) {
-            final int sv = searchVersion;
-            Optional<VersionDoc> candidate = allVersions.stream()
-                    .filter(v -> v.getVersionNumber() == sv && v.isFullSnapshot())
-                    .findFirst();
-            if (candidate.isPresent()) {
-                return candidate.get().getGeometryData();
-            }
-            searchVersion--;
-        }
-        return null;
-    }
-
     public org.example.dv.Geometry3D reconstructGeometry(VersionDoc versionDoc) {
         if (versionDoc == null)
             return null;

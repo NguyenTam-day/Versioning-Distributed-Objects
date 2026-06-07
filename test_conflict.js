@@ -30,7 +30,7 @@ function generateCubeObj(version, modifier = 0) {
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       let z = Math.sin(x * 0.3) * Math.cos(y * 0.3);
-      
+
       // Introduce changes based on version and modifier
       if (x === 5 && y === 5) {
         z += version * 0.2 + modifier * 0.5;
@@ -231,14 +231,14 @@ async function main() {
 
     // 9. Fetch and display final histories
     console.log('\n🔍 Step 8: Fetching final histories to verify resolution...');
-    
+
     const finalHistoryA = await getHistory(NODE_A, modelId);
     const finalHistoryB = await getHistory(NODE_B, modelId);
 
     console.log('\n========================================================');
     console.log('📊 FINAL RESOLUTION RESULTS');
     console.log('========================================================');
-    
+
     console.log(`\n📐 Node A (http://localhost:5000) History:`);
     finalHistoryA.forEach(v => {
       const isWinner = v.branchName === 'main';
@@ -261,10 +261,10 @@ async function main() {
     console.log('\n========================================================');
     console.log('🕵️‍♂️ CONSISTENCY AUDIT VERIFICATION');
     console.log('========================================================');
-    
+
     const countA = finalHistoryA.length;
     const countB = finalHistoryB.length;
-    
+
     if (countA !== countB) {
       console.log('   ❌ FAILED: Node A and Node B have different number of versions.');
       process.exit(1);

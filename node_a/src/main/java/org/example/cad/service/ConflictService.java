@@ -93,13 +93,15 @@ public class ConflictService {
 
         // Detect sibling conflict:
         // another ACTIVE (non-conflict-branch) version already exists with same parentVersion,
-        // and it must be from a different siteId.
+        // and it must be from a different siteId and on the same branch.
         return existingVersions.stream()
                 .anyMatch(v ->
                         incomingParent.equals(v.getParentVersion())
                                 && !v.getId().equals(incoming.getId())
                                 && incoming.getSiteId() != null
                                 && !incoming.getSiteId().equals(v.getSiteId())
+                                && ((incoming.getBranchName() == null && v.getBranchName() == null)
+                                        || (incoming.getBranchName() != null && incoming.getBranchName().equals(v.getBranchName())))
                                 // Only count non-conflict siblings as real conflicts
                                 && (v.getBranchName() == null
                                         || !v.getBranchName().startsWith("conflict/")));
@@ -132,6 +134,8 @@ public class ConflictService {
                                 && !v.getId().equals(incoming.getId())
                                 && incoming.getSiteId() != null
                                 && !incoming.getSiteId().equals(v.getSiteId())
+                                && ((incoming.getBranchName() == null && v.getBranchName() == null)
+                                        || (incoming.getBranchName() != null && incoming.getBranchName().equals(v.getBranchName())))
                                 // Skip siblings already resolved to a conflict branch
                                 && (v.getBranchName() == null
                                         || !v.getBranchName().startsWith("conflict/")))

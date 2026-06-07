@@ -87,9 +87,13 @@ public class SyncController {
             return changed;
         }
 
-        // Find siblings = versions with same parent that are not this very doc
+        // Find siblings = versions with same parent that are not this very doc and target the same branch
         List<VersionDoc> siblings = existingVersions.stream()
-                .filter(v -> parent.equals(v.getParentVersion()) && !v.getId().equals(versionDoc.getId()))
+                .filter(v -> parent.equals(v.getParentVersion())
+                        && !v.getId().equals(versionDoc.getId())
+                        && ((versionDoc.getBranchName() == null && v.getBranchName() == null)
+                                || (versionDoc.getBranchName() != null && versionDoc.getBranchName().equals(v.getBranchName())))
+                        && (v.getBranchName() == null || !v.getBranchName().startsWith("conflict/")))
                 .collect(java.util.stream.Collectors.toList());
 
         if (siblings.isEmpty()) {
