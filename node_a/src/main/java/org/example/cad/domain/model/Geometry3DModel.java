@@ -20,7 +20,6 @@ import java.util.UUID;
  * - geometry versions
  * - distributed site info
  * - metadata
- * - serialized geometry JSON
  */
 @Document(collection = "geometries")
 
@@ -84,21 +83,6 @@ public class Geometry3DModel {
     private String format;
 
     /**
-     * Serialized vertices JSON
-     */
-    private String vertices;
-
-    /**
-     * Serialized faces JSON
-     */
-    private String faces;
-
-    /**
-     * Full geometry JSON
-     */
-    private String geometryJson;
-
-    /**
      * Origin node/site
      * node-a / node-b
      */
@@ -122,12 +106,6 @@ public class Geometry3DModel {
 
             String format,
 
-            String vertices,
-
-            String faces,
-
-            String geometryJson,
-
             String siteId
 
     ) {
@@ -149,15 +127,6 @@ public class Geometry3DModel {
 
         model.setFormat(
                 format);
-
-        model.setVertices(
-                vertices);
-
-        model.setFaces(
-                faces);
-
-        model.setGeometryJson(
-                geometryJson);
 
         model.setSiteId(
                 siteId);

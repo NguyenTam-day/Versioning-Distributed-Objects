@@ -36,9 +36,6 @@ public class Geometry3DModel {
     private int version;
     private String name;
     private String format;
-    private String vertices;      // JSON array of vertices
-    private String faces;         // JSON array of faces
-    private String geometryJson;  // Full JSON representation
     private String siteId;
     private long timestamp;
 
@@ -47,9 +44,6 @@ public class Geometry3DModel {
             int version,
             String name,
             String format,
-            String vertices,
-            String faces,
-            String geometryJson,
             String siteId
     ) {
         Geometry3DModel model = new Geometry3DModel();
@@ -58,12 +52,8 @@ public class Geometry3DModel {
         model.setVersion(version);
         model.setName(name);
         model.setFormat(format);
-        model.setVertices(vertices);
-        model.setFaces(faces);
-        model.setGeometryJson(geometryJson);
         model.setSiteId(siteId);
         model.setTimestamp(System.currentTimeMillis());
         return model;
     }
 }
-

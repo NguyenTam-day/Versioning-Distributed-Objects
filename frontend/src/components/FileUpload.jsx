@@ -41,22 +41,41 @@ const FileUpload = ({
         }
     }, [objectIdProp]);
 
-    // Load available branches for autocomplete
+    const [availableVersions, setAvailableVersions] = useState([]);
+    const [isCreatingBranch, setIsCreatingBranch] = useState(false);
+    const [newBranchName, setNewBranchName] = useState("");
+
+    // Load available branches and versions for dropdown selectors
     useEffect(() => {
-        const loadBranches = async () => {
-            if (!objectId || !api) return;
+        const loadMetadata = async () => {
+            if (!objectId || !api) {
+                setAvailableBranches(["main"]);
+                setAvailableVersions([]);
+                return;
+            }
             try {
-                const response = await api.getBranches(objectId);
-                const resData = response.data;
-                const list = resData?.data || (Array.isArray(resData) ? resData : []);
-                if (Array.isArray(list)) {
-                    setAvailableBranches(list);
+                // Fetch branches
+                const branchResponse = await api.getBranches(objectId);
+                const branchData = branchResponse.data;
+                const branchList = branchData?.data || (Array.isArray(branchData) ? branchData : []);
+                if (Array.isArray(branchList)) {
+                    const finalBranches = branchList.includes("main") ? branchList : ["main", ...branchList];
+                    setAvailableBranches(finalBranches);
+                }
+
+                // Fetch versions (history)
+                const historyResponse = await api.getHistory(objectId);
+                const historyData = historyResponse.data;
+                const historyList = historyData?.data || (Array.isArray(historyData) ? historyData : []);
+                if (Array.isArray(historyList)) {
+                    const sortedVersions = [...historyList].sort((a, b) => b.versionNumber - a.versionNumber);
+                    setAvailableVersions(sortedVersions);
                 }
             } catch (err) {
-                console.error("Failed to load branches in FileUpload:", err);
+                console.error("Failed to load metadata in FileUpload:", err);
             }
         };
-        loadBranches();
+        loadMetadata();
     }, [objectId, api]);
 
     // ─── Drag & Drop handlers ─────────────────────────
@@ -178,33 +197,75 @@ const FileUpload = ({
             <div className="form-group" style={{ display: "flex", gap: "16px", marginTop: "1rem" }}>
                 <div style={{ flex: 1 }}>
                     <label>Target Branch</label>
-                    <input
-                        type="text"
-                        placeholder="main"
-                        value={selectedBranch || ""}
-                        onChange={(e) => {
-                            if (setSelectedBranch) setSelectedBranch(e.target.value);
-                        }}
-                        disabled={loading}
-                        list="available-branches"
-                    />
-                    <datalist id="available-branches">
-                        {availableBranches.map((br) => (
-                            <option key={br} value={br} />
-                        ))}
-                    </datalist>
+                    {isCreatingBranch ? (
+                        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                            <input
+                                type="text"
+                                placeholder="New branch name"
+                                value={newBranchName}
+                                onChange={(e) => {
+                                    setNewBranchName(e.target.value);
+                                    if (setSelectedBranch) setSelectedBranch(e.target.value);
+                                }}
+                                disabled={loading}
+                                style={{ flex: 1 }}
+                            />
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => {
+                                    setIsCreatingBranch(false);
+                                    setNewBranchName("");
+                                    if (setSelectedBranch) setSelectedBranch("main");
+                                }}
+                                style={{ padding: "5px 10px", minWidth: "auto", display: "flex", alignItems: "center", justifyContent: "center" }}
+                                title="Select existing branch"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    ) : (
+                        <select
+                            value={selectedBranch || "main"}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === "__new__") {
+                                    setIsCreatingBranch(true);
+                                    setNewBranchName("");
+                                    if (setSelectedBranch) setSelectedBranch("");
+                                } else {
+                                    if (setSelectedBranch) setSelectedBranch(val);
+                                }
+                            }}
+                            disabled={loading}
+                        >
+                            {availableBranches.map((br) => (
+                                <option key={br} value={br}>{br}</option>
+                            ))}
+                            <option value="__new__">+ Create new branch...</option>
+                        </select>
+                    )}
                 </div>
                 <div style={{ flex: 1 }}>
                     <label>Parent Version (Base)</label>
-                    <input
-                        type="text"
-                        placeholder="e.g., v1_A (empty for first)"
+                    <select
                         value={baseVersion || ""}
                         onChange={(e) => {
-                            if (setBaseVersion) setBaseVersion(e.target.value || null);
+                            const val = e.target.value;
+                            if (setBaseVersion) setBaseVersion(val || null);
                         }}
                         disabled={loading}
-                    />
+                    >
+                        <option value="">None (First Version)</option>
+                        {availableVersions.map((v) => {
+                            const label = `${v.versionName} - ${v.commitMessage || 'Upload file'} (${v.branchName})`;
+                            return (
+                                <option key={v.versionName} value={v.versionName}>
+                                    {label}
+                                </option>
+                            );
+                        })}
+                    </select>
                 </div>
             </div>
 

@@ -5,6 +5,8 @@ import org.example.cad.domain.model.VersionDoc;
 import org.example.cad.repository.Geometry3DRepository;
 import org.example.cad.repository.VersionRepository;
 import org.example.cad.service.SyncService;
+import org.example.cad.service.VersionService;
+import org.example.cad.dto.request.CreateVersionRequest;
 import org.example.dv.*;
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,6 +25,7 @@ public class Geometry3DService {
     private final Geometry3DRepository geometry3DRepository;
     private final VersionRepository versionRepository;
     private final SyncService syncService;
+    private final VersionService versionService;
     private final MongoTemplate mongoTemplate;
 
     /**
@@ -36,10 +39,12 @@ public class Geometry3DService {
             Geometry3DRepository geometry3DRepository,
             VersionRepository versionRepository,
             SyncService syncService,
+            VersionService versionService,
             MongoTemplate mongoTemplate) {
         this.geometry3DRepository = geometry3DRepository;
         this.versionRepository = versionRepository;
         this.syncService = syncService;
+        this.versionService = versionService;
         this.mongoTemplate = mongoTemplate;
     }
 
@@ -85,28 +90,21 @@ public class Geometry3DService {
                 newVersion,
                 geometry.getName(),
                 geometry.getFormat(),
-                new Gson().toJson(geometry.getVertices()),
-                new Gson().toJson(geometry.getFaces()),
-                new Gson().toJson(geometry),
                 currentSiteId);
+
 
         geometry3DRepository.save(model);
 
-        // parentVersion MUST come from the checked-out base version
-        // stored on frontend state during checkout — NOT auto-resolved from DB.
-        // If the caller passes null (first upload), it stays null.
-        VersionDoc versionDoc = VersionDoc.createNew(
-                objectId,
-                newVersion,
-                "Upload file: " + filename,
-                new Gson().toJson(geometry),
-                "system",
-                currentSiteId,
-                branchName != null && !branchName.isEmpty() ? branchName : "main",
-                parentVersion,
-                true);
+        // Create corresponding VersionDoc using VersionService to trigger snapshot/delta logic
+        CreateVersionRequest req = new CreateVersionRequest();
+        req.setModelId(objectId);
+        req.setCommitMessage("Upload file: " + filename);
+        req.setGeometryData(new Gson().toJson(geometry));
+        req.setAuthor("system");
+        req.setBranchName(branchName != null && !branchName.isEmpty() ? branchName : "main");
+        req.setParentVersion(parentVersion);
 
-        versionRepository.save(versionDoc);
+        VersionDoc versionDoc = versionService.createVersion(req, currentSiteId);
 
         // Asynchronously sync version to peers
         try {
@@ -120,23 +118,27 @@ public class Geometry3DService {
 
     /**
      * Get geometry by object ID and version number (1-indexed).
+     * Reads geometry data from VersionDoc.
      */
     public Geometry3D getGeometry(String objectId, int version) {
-        Optional<Geometry3DModel> model = geometry3DRepository.findByObjectIdAndVersion(objectId, version);
-        if (model.isEmpty())
+        Optional<VersionDoc> vd = versionRepository.findByModelIdAndVersionNumber(objectId, version);
+        if (vd.isEmpty() || vd.get().getGeometryData() == null)
             return null;
-        return new Gson().fromJson(model.get().getGeometryJson(), Geometry3D.class);
+        return new Gson().fromJson(vd.get().getGeometryData(), Geometry3D.class);
     }
 
     /**
      * Get all versions of a geometry.
+     * Reads geometry data from VersionDoc.
      */
     public List<Geometry3D> getAllVersions(String objectId) {
-        List<Geometry3DModel> models = geometry3DRepository.findByObjectId(objectId);
+        List<VersionDoc> versionDocs = versionRepository.findByModelIdOrderByVersionNumberAsc(objectId);
         List<Geometry3D> result = new ArrayList<>();
         Gson gson = new Gson();
-        for (Geometry3DModel model : models) {
-            result.add(gson.fromJson(model.getGeometryJson(), Geometry3D.class));
+        for (VersionDoc vd : versionDocs) {
+            if (vd.getGeometryData() != null) {
+                result.add(gson.fromJson(vd.getGeometryData(), Geometry3D.class));
+            }
         }
         return result;
     }
@@ -154,11 +156,11 @@ public class Geometry3DService {
     }
 
     /**
-     * Get JSON representation of a geometry.
+     * Get JSON representation of a geometry from VersionDoc.
      */
     public String getGeometryAsJson(String objectId, int version) {
-        Optional<Geometry3DModel> model = geometry3DRepository.findByObjectIdAndVersion(objectId, version);
-        return model.map(Geometry3DModel::getGeometryJson).orElse(null);
+        Optional<VersionDoc> vd = versionRepository.findByModelIdAndVersionNumber(objectId, version);
+        return vd.map(VersionDoc::getGeometryData).orElse(null);
     }
 
     /**

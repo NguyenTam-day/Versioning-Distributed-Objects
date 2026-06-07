@@ -1,10 +1,8 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 
 import FileUpload from "../components/FileUpload";
 import VersionHistory from "../components/VersionHistory";
-import DiffViewer from "../components/DiffViewer";
 import GeometryViewer from "../components/GeometryViewer";
-import ConflictResolver from "../components/ConflictResolver";
 import BranchSelector from "../components/BranchSelector";
 
 import { useNode } from "../hooks/useNode";
@@ -140,7 +138,7 @@ const CheckoutPanel = ({ version, baseVersion, onClear }) => {
 
 // ── Main Component ──────────────────────────────────────
 
-const DashboardPage = () => {
+const DashboardPage = ({ onNavigate }) => {
     const { currentNode, api } = useNode();
 
     const [objectId, setObjectId]                   = useState("");
@@ -148,12 +146,41 @@ const DashboardPage = () => {
     const [currentBranch, setCurrentBranch]         = useState("main");
     const [checkedOutVersion, setCheckedOutVersion] = useState(null); // from checkout API
     const [baseVersion, setBaseVersion]             = useState(null); // baseVersion state
-    const [diffData, setDiffData]                   = useState(null);
     const [selectedGeometry, setSelectedGeometry]   = useState(null);
     const [loading, setLoading]                     = useState(false);
     const [checkoutLoading, setCheckoutLoading]     = useState(false);
     const [error, setError]                         = useState("");
     const [activeTab, setActiveTab]                 = useState("upload");
+    const [syncEnabled, setSyncEnabled]             = useState(true);
+
+    // ─── Sync Toggle Logic ─────────────────────────────
+
+    const fetchSyncStatus = useCallback(async () => {
+        try {
+            const response = await api.getSyncStatus();
+            setSyncEnabled(response.data?.syncEnabled ?? true);
+        } catch (err) {
+            console.error("Failed to fetch sync status", err);
+        }
+    }, [api]);
+
+    useEffect(() => {
+        fetchSyncStatus();
+    }, [fetchSyncStatus]);
+
+    const handleToggleSync = async () => {
+        try {
+            if (syncEnabled) {
+                await api.disableSync();
+                setSyncEnabled(false);
+            } else {
+                await api.enableSync();
+                setSyncEnabled(true);
+            }
+        } catch (err) {
+            setError(`Failed to toggle sync: ${err.message}`);
+        }
+    };
 
     // ─── Checkout ──────────────────────────────────────
 
@@ -196,19 +223,14 @@ const DashboardPage = () => {
 
     // ─── Diff ──────────────────────────────────────────
 
-    const handleDiffVersions = async (fromVersion, toVersion) => {
-        setLoading(true);
-        setError("");
-        setDiffData(null);
-
-        try {
-            const response = await api.diffVersions(objectId, fromVersion, toVersion);
-            setDiffData(response.data);
-            setActiveTab("diff");
-        } catch (err) {
-            setError(`Failed to compute diff: ${err.message}`);
-        } finally {
-            setLoading(false);
+    const handleDiffVersions = (fromVersion, toVersion) => {
+        if (onNavigate) {
+            onNavigate("compare", {
+                objectId: objectId,
+                fromVersion: fromVersion,
+                toVersion: toVersion,
+                node: currentNode
+            });
         }
     };
 
@@ -236,9 +258,7 @@ const DashboardPage = () => {
     const TABS = [
         { id: "upload",    label: "Upload" },
         { id: "history",   label: "History" },
-        { id: "diff",      label: "Diff" },
         { id: "viewer",    label: "Viewer" },
-        { id: "conflicts", label: "⚠ Conflicts" },
     ];
 
     // ─── Render ────────────────────────────────────────
@@ -260,6 +280,16 @@ const DashboardPage = () => {
                 </div>
 
                 <div className="repo-sync-actions">
+                    <button
+                        className={`btn ${syncEnabled ? 'btn-success' : 'btn-danger'}`}
+                        onClick={handleToggleSync}
+                        style={{ display: "flex", alignItems: "center", gap: 6 }}
+                        title={syncEnabled ? "Click to disable synchronization with other node" : "Click to enable synchronization with other node"}
+                    >
+                        <SyncIcon />
+                        {syncEnabled ? "Sync: On" : "Sync: Off"}
+                    </button>
+
                     {objectId && (
                         <BranchSelector
                             modelId={objectId}
@@ -371,22 +401,10 @@ const DashboardPage = () => {
                 </>
             )}
 
-            {/* ─── Diff ────────────────────────────────── */}
-
-            {activeTab === "diff" && (
-                <DiffViewer diffData={diffData} loading={loading} error={error} />
-            )}
-
             {/* ─── Viewer ──────────────────────────────── */}
 
             {activeTab === "viewer" && (
                 <GeometryViewer geometryJson={selectedGeometry} />
-            )}
-
-            {/* ─── Conflicts ───────────────────────────── */}
-
-            {activeTab === "conflicts" && objectId && (
-                <ConflictResolver modelId={objectId} />
             )}
 
         </div>

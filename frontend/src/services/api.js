@@ -154,8 +154,34 @@ export function createNodeApi(nodeName) {
             return api.post("/sync/pull", { modelId, sourceNode });
         },
 
-        getSyncStatus(modelId) {
-            return api.get(`/sync/status/${modelId}`);
+        getSyncStatus() {
+            return api.get("/sync/status");
+        },
+
+        enableSync() {
+            return api.post("/sync/enable");
+        },
+
+        disableSync() {
+            return api.post("/sync/disable");
+        },
+
+        // ─── Demo / Analysis APIs ─────────────────────────────
+
+        getVersionChain(modelId) {
+            return api.get(`/version/${modelId}/chain`);
+        },
+
+        restoreVersion(modelId, versionNumber) {
+            return api.get(`/version/${modelId}/restore/${versionNumber}`);
+        },
+
+        benchmarkVersion(modelId, versionNumber) {
+            return api.get(`/version/${modelId}/benchmark/${versionNumber}`);
+        },
+
+        getVersionDelta(modelId, versionNumber) {
+            return api.get(`/version/${modelId}/delta/${versionNumber}`);
         },
     };
 }

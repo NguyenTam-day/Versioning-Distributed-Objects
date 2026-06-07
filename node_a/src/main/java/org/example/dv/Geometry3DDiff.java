@@ -11,17 +11,17 @@ public class Geometry3DDiff {
 
         public String geometryName;
 
-        public int oldVertexCount;
+        public transient int oldVertexCount;
         public int newVertexCount;
-        public int vertexAdditions;
-        public int vertexModifications;
-        public int vertexDeletions;
+        public transient int vertexAdditions;
+        public transient int vertexModifications;
+        public transient int vertexDeletions;
 
-        public int oldFaceCount;
+        public transient int oldFaceCount;
         public int newFaceCount;
-        public int faceAdditions;
-        public int faceModifications;
-        public int faceDeletions;
+        public transient int faceAdditions;
+        public transient int faceModifications;
+        public transient int faceDeletions;
 
         public List<VertexChange> vertexChanges = new ArrayList<>();
         public List<FaceChange> faceChanges = new ArrayList<>();
@@ -50,7 +50,7 @@ public class Geometry3DDiff {
     public static class VertexChange {
         public int index;
         public String type;
-        public Geometry3D.Vertex oldValue;
+        public transient Geometry3D.Vertex oldValue;
         public Geometry3D.Vertex newValue;
 
         public VertexChange(int index, String type,
@@ -67,7 +67,7 @@ public class Geometry3DDiff {
     public static class FaceChange {
         public int index;
         public String type;
-        public Geometry3D.Face oldValue;
+        public transient Geometry3D.Face oldValue;
         public Geometry3D.Face newValue;
 
         public FaceChange(int index, String type,
@@ -121,9 +121,7 @@ public class Geometry3DDiff {
 
         if (av.size() > bv.size()) {
             r.vertexDeletions = av.size() - bv.size();
-            for (int i = bv.size(); i < av.size(); i++) {
-                r.vertexChanges.add(new VertexChange(i, "deleted", av.get(i), null));
-            }
+            // Deletions are implicitly handled by newVertexCount truncation, no need to save in JSON
         }
 
         // ===== FACE DIFF =====
@@ -145,11 +143,65 @@ public class Geometry3DDiff {
 
         if (af.size() > bf.size()) {
             r.faceDeletions = af.size() - bf.size();
-            for (int i = bf.size(); i < af.size(); i++) {
-                r.faceChanges.add(new FaceChange(i, "deleted", af.get(i), null));
-            }
+            // Deletions are implicitly handled by newFaceCount truncation, no need to save in JSON
         }
 
         return r;
+    }
+
+    // ================= APPLY DIFF =================
+    public static Geometry3D apply(Geometry3D base, DiffReport report) {
+        if (base == null) base = new Geometry3D();
+        if (report == null) return base;
+
+        Geometry3D result = new Geometry3D();
+        result.setName(report.geometryName != null ? report.geometryName : base.getName());
+        result.setFormat(base.getFormat() != null ? base.getFormat() : "obj");
+
+        // 1. Rebuild Vertices
+        List<Geometry3D.Vertex> vertices = new ArrayList<>();
+        if (base.getVertices() != null) {
+            vertices.addAll(base.getVertices());
+        }
+        if (vertices.size() > report.newVertexCount) {
+            vertices = new ArrayList<>(vertices.subList(0, report.newVertexCount));
+        }
+        while (vertices.size() < report.newVertexCount) {
+            vertices.add(null);
+        }
+        if (report.vertexChanges != null) {
+            for (VertexChange vc : report.vertexChanges) {
+                if ("modified".equals(vc.type) || "added".equals(vc.type)) {
+                    if (vc.index >= 0 && vc.index < vertices.size()) {
+                        vertices.set(vc.index, vc.newValue);
+                    }
+                }
+            }
+        }
+        result.setVertices(vertices);
+
+        // 2. Rebuild Faces
+        List<Geometry3D.Face> faces = new ArrayList<>();
+        if (base.getFaces() != null) {
+            faces.addAll(base.getFaces());
+        }
+        if (faces.size() > report.newFaceCount) {
+            faces = new ArrayList<>(faces.subList(0, report.newFaceCount));
+        }
+        while (faces.size() < report.newFaceCount) {
+            faces.add(null);
+        }
+        if (report.faceChanges != null) {
+            for (FaceChange fc : report.faceChanges) {
+                if ("modified".equals(fc.type) || "added".equals(fc.type)) {
+                    if (fc.index >= 0 && fc.index < faces.size()) {
+                        faces.set(fc.index, fc.newValue);
+                    }
+                }
+            }
+        }
+        result.setFaces(faces);
+
+        return result;
     }
 }

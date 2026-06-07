@@ -5,6 +5,8 @@ import org.example.cad.dto.request.CreateVersionRequest;
 import org.example.cad.repository.VersionRepository;
 import org.example.cad.repository.Geometry3DRepository;
 import com.google.gson.Gson;
+import org.example.dv.Geometry3D;
+import org.example.dv.Geometry3DDiff;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -133,9 +135,9 @@ public class VersionService {
         String parentVersion = request.getParentVersion();
 
         // Fallback: only auto-assign currentHead as parent when:
-        //   - client did not supply an explicit parentVersion
-        //   - AND there is already a SYNCED/ACTIVE version on main
-        //     (i.e. this is NOT the very first upload)
+        // - client did not supply an explicit parentVersion
+        // - AND there is already a SYNCED/ACTIVE version on main
+        // (i.e. this is NOT the very first upload)
         if ((parentVersion == null || parentVersion.isEmpty()) && currentHead != null) {
             boolean hasActivePredecessor = existingVersions.stream()
                     .anyMatch(v -> "main".equals(v.getBranchName())
@@ -175,6 +177,48 @@ public class VersionService {
                         : "main";
 
         // ---------------------------------------------------------------------
+        // Snapshot / Delta cycle:
+        // v1, v6, v11, v16, ... → fullSnapshot = true (store full geometry)
+        // v2–v5, v7–v10, ... → fullSnapshot = false (store diff only)
+        //
+        // Rule: versionNumber % 5 == 1 → snapshot
+        // ---------------------------------------------------------------------
+
+        boolean isSnapshot = (nextVersionNumber % 5 == 1);
+
+        // Compute storage payload
+        String storageData = request.getGeometryData();
+        if (!isSnapshot && currentHead != null
+                && currentHead.getGeometryData() != null
+                && !currentHead.getGeometryData().isEmpty()
+                && request.getGeometryData() != null
+                && !request.getGeometryData().isEmpty()) {
+            // For delta versions, resolve the previous snapshot geometry to compute diff
+            String baseGeometryJson = resolveSnapshotGeometry(request.getModelId(), currentHead, existingVersions);
+            if (baseGeometryJson != null) {
+                try {
+                    Geometry3D oldGeo = gson.fromJson(baseGeometryJson, Geometry3D.class);
+                    Geometry3D newGeo = gson.fromJson(request.getGeometryData(), Geometry3D.class);
+                    if (oldGeo != null && newGeo != null) {
+                        Geometry3DDiff.DiffReport diff = Geometry3DDiff.diff(oldGeo, newGeo);
+                        storageData = gson.toJson(diff);
+                    }
+                } catch (Exception e) {
+                    // Fallback to full geometry if diff fails
+                    log.warn("Delta computation failed for v{}, falling back to full snapshot", nextVersionNumber);
+                    isSnapshot = true;
+                    storageData = request.getGeometryData();
+                }
+            } else {
+                // Cannot find base snapshot, force full snapshot
+                isSnapshot = true;
+            }
+        } else if (!isSnapshot) {
+            // No previous head available – force snapshot
+            isSnapshot = true;
+        }
+
+        // ---------------------------------------------------------------------
         // Create new version
         // ---------------------------------------------------------------------
 
@@ -182,14 +226,14 @@ public class VersionService {
                 request.getModelId(),
                 nextVersionNumber,
                 request.getCommitMessage(),
-                request.getGeometryData(),
+                storageData,
                 request.getAuthor() != null
                         ? request.getAuthor()
                         : "system",
                 siteId,
                 branchName,
                 parentVersion,
-                request.isFullSnapshot());
+                isSnapshot);
 
         // ---------------------------------------------------------------------
         // CONFLICT DETECTION
@@ -218,7 +262,7 @@ public class VersionService {
                         loser.getVersionNumber(), loser.getSiteId());
                 loser.setBranchName(conflictBranch);
                 loser.setSyncStatus("CONFLICT");
-                
+
                 // Winner remains on main
                 winner.setBranchName("main");
                 winner.setSyncStatus("ACTIVE");
@@ -244,19 +288,97 @@ public class VersionService {
                         newVersion.getVersionName(),
                         newVersion.getTimestamp(),
                         winner.getVersionName(),
-                        loser.getBranchName()
-                );
+                        loser.getBranchName());
             }
         }
 
         return saveVersion(newVersion);
     }
 
-    private void saveGeometryFromVersion(VersionDoc versionDoc) {
+    /**
+     * Snapshot / Delta cycle helper:
+     * Walk backwards from currentHead to find the nearest full-snapshot VersionDoc
+     * and return its geometryData (the full geometry JSON to base the diff on).
+     */
+    private String resolveSnapshotGeometry(String modelId, VersionDoc currentHead, List<VersionDoc> allVersions) {
+        if (currentHead.isFullSnapshot()) {
+            return currentHead.getGeometryData();
+        }
+        // Walk backwards through version numbers to find the closest snapshot
+        int searchVersion = currentHead.getVersionNumber() - 1;
+        while (searchVersion >= 1) {
+            final int sv = searchVersion;
+            Optional<VersionDoc> candidate = allVersions.stream()
+                    .filter(v -> v.getVersionNumber() == sv && v.isFullSnapshot())
+                    .findFirst();
+            if (candidate.isPresent()) {
+                return candidate.get().getGeometryData();
+            }
+            searchVersion--;
+        }
+        return null;
+    }
+
+    public org.example.dv.Geometry3D reconstructGeometry(VersionDoc versionDoc) {
+        if (versionDoc == null)
+            return null;
+        if (versionDoc.isFullSnapshot()) {
+            try {
+                return gson.fromJson(versionDoc.getGeometryData(), org.example.dv.Geometry3D.class);
+            } catch (Exception e) {
+                log.error("Failed to parse full snapshot geometry for version {}", versionDoc.getVersionName(), e);
+                return null;
+            }
+        }
+
+        // It is a delta. We must traverse backwards via parentVersion.
+        List<VersionDoc> path = new java.util.ArrayList<>();
+        VersionDoc current = versionDoc;
+        while (current != null && !current.isFullSnapshot()) {
+            path.add(0, current); // add to the front so we process from oldest to newest
+            String parentName = current.getParentVersion();
+            if (parentName == null || parentName.isEmpty()) {
+                break;
+            }
+            Optional<VersionDoc> parentOpt = versionRepository.findByModelIdAndVersionName(versionDoc.getModelId(),
+                    parentName);
+            if (parentOpt.isPresent()) {
+                current = parentOpt.get();
+            } else {
+                current = null;
+            }
+        }
+
+        if (current == null || !current.isFullSnapshot()) {
+            log.warn("Cannot reconstruct geometry for version {} because base snapshot is missing",
+                    versionDoc.getVersionName());
+            return null;
+        }
+
+        // Start with the base snapshot geometry
+        org.example.dv.Geometry3D geometry = gson.fromJson(current.getGeometryData(), org.example.dv.Geometry3D.class);
+        if (geometry == null)
+            return null;
+
+        // Apply diffs sequentially
+        for (VersionDoc doc : path) {
+            try {
+                Geometry3DDiff.DiffReport report = gson.fromJson(doc.getGeometryData(),
+                        Geometry3DDiff.DiffReport.class);
+                geometry = Geometry3DDiff.apply(geometry, report);
+            } catch (Exception e) {
+                log.error("Error applying diff for version {}", doc.getVersionName(), e);
+                return null;
+            }
+        }
+
+        return geometry;
+    }
+
+    public void saveGeometryFromVersion(VersionDoc versionDoc) {
         if (versionDoc.getGeometryData() != null && !versionDoc.getGeometryData().isEmpty()) {
             try {
-                org.example.dv.Geometry3D geometry = gson.fromJson(versionDoc.getGeometryData(),
-                        org.example.dv.Geometry3D.class);
+                org.example.dv.Geometry3D geometry = reconstructGeometry(versionDoc);
                 if (geometry != null) {
                     if (!geometry3DRepository.findByObjectIdAndVersionAndSiteId(versionDoc.getModelId(),
                             versionDoc.getVersionNumber(), versionDoc.getSiteId()).isPresent()) {
@@ -266,16 +388,14 @@ public class VersionService {
                                         versionDoc.getVersionNumber(),
                                         geometry.getName() != null ? geometry.getName() : "model",
                                         geometry.getFormat() != null ? geometry.getFormat() : "obj",
-                                        gson.toJson(geometry.getVertices()),
-                                        gson.toJson(geometry.getFaces()),
-                                        versionDoc.getGeometryData(),
                                         versionDoc.getSiteId());
+
                         geoModel.setTimestamp(versionDoc.getTimestamp().toEpochMilli());
                         geometry3DRepository.save(geoModel);
                     }
                 }
             } catch (Exception e) {
-                // Non-blocking sync error
+                log.error("Error reconstructing and saving geometry from version: {}", e.getMessage(), e);
             }
         }
     }

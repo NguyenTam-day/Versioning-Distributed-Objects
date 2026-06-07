@@ -6,6 +6,7 @@ import org.example.cad.repository.VersionRepository;
 import org.example.cad.repository.Geometry3DRepository;
 import org.example.cad.service.SyncService;
 import org.example.cad.service.SyncControlService;
+import org.example.cad.service.VersionService;
 import org.example.dv.Geometry3D;
 import com.google.gson.Gson;
 import org.springframework.http.ResponseEntity;
@@ -26,43 +27,27 @@ public class SyncController {
     private final Geometry3DRepository geometry3DRepository;
     private final org.example.cad.service.ConflictService conflictService;
     private final SyncControlService syncControlService;
+    private final VersionService versionService;
 
     public SyncController(VersionRepository versionRepository,
             SyncService syncService,
             Geometry3DRepository geometry3DRepository,
             org.example.cad.service.ConflictService conflictService,
-            SyncControlService syncControlService) {
+            SyncControlService syncControlService,
+            VersionService versionService) {
         this.versionRepository = versionRepository;
         this.syncService = syncService;
         this.geometry3DRepository = geometry3DRepository;
         this.conflictService = conflictService;
         this.syncControlService = syncControlService;
+        this.versionService = versionService;
     }
 
     private void saveGeometryFromVersion(VersionDoc versionDoc) {
-        if (versionDoc.getGeometryData() != null && !versionDoc.getGeometryData().isEmpty()) {
-            try {
-                Gson gson = new Gson();
-                Geometry3D geometry = gson.fromJson(versionDoc.getGeometryData(), Geometry3D.class);
-                if (geometry != null) {
-                    if (!geometry3DRepository.findByObjectIdAndVersionAndSiteId(versionDoc.getModelId(),
-                            versionDoc.getVersionNumber(), versionDoc.getSiteId()).isPresent()) {
-                        Geometry3DModel geoModel = Geometry3DModel.createNew(
-                                versionDoc.getModelId(),
-                                versionDoc.getVersionNumber(),
-                                geometry.getName() != null ? geometry.getName() : "model",
-                                geometry.getFormat() != null ? geometry.getFormat() : "obj",
-                                gson.toJson(geometry.getVertices()),
-                                gson.toJson(geometry.getFaces()),
-                                versionDoc.getGeometryData(),
-                                versionDoc.getSiteId());
-                        geoModel.setTimestamp(versionDoc.getTimestamp().toEpochMilli());
-                        geometry3DRepository.save(geoModel);
-                    }
-                }
-            } catch (Exception e) {
-                // Non-blocking sync error
-            }
+        try {
+            versionService.saveGeometryFromVersion(versionDoc);
+        } catch (Exception e) {
+            // Non-blocking sync error
         }
     }
 

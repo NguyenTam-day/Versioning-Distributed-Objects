@@ -32,6 +32,7 @@ public class SyncService {
     private final RestTemplate restTemplate;
     private final SyncControlService syncControlService;
     private final Geometry3DRepository geometry3DRepository;
+    private final VersionService versionService;
     private final Gson gson = new Gson();
 
     private List<String> peers;
@@ -47,38 +48,20 @@ public class SyncService {
     public SyncService(VersionRepository versionRepository,
             RestTemplate restTemplate,
             SyncControlService syncControlService,
-            Geometry3DRepository geometry3DRepository) {
+            Geometry3DRepository geometry3DRepository,
+            VersionService versionService) {
         this.versionRepository = versionRepository;
         this.restTemplate = restTemplate;
         this.syncControlService = syncControlService;
         this.geometry3DRepository = geometry3DRepository;
+        this.versionService = versionService;
     }
 
     private void saveGeometryFromVersion(VersionDoc versionDoc) {
-        if (versionDoc.getGeometryData() != null && !versionDoc.getGeometryData().isEmpty()) {
-            try {
-                Geometry3D geometry = gson.fromJson(versionDoc.getGeometryData(), Geometry3D.class);
-                if (geometry != null) {
-                    if (!geometry3DRepository.findByObjectIdAndVersionAndSiteId(versionDoc.getModelId(),
-                            versionDoc.getVersionNumber(), versionDoc.getSiteId()).isPresent()) {
-                        Geometry3DModel geoModel = Geometry3DModel.createNew(
-                                versionDoc.getModelId(),
-                                versionDoc.getVersionNumber(),
-                                geometry.getName() != null ? geometry.getName() : "model",
-                                geometry.getFormat() != null ? geometry.getFormat() : "obj",
-                                gson.toJson(geometry.getVertices()),
-                                gson.toJson(geometry.getFaces()),
-                                versionDoc.getGeometryData(),
-                                versionDoc.getSiteId());
-                        geoModel.setTimestamp(versionDoc.getTimestamp().toEpochMilli());
-                        geometry3DRepository.save(geoModel);
-                        log.info("Saved geometry for modelId={} version={}", versionDoc.getModelId(),
-                                versionDoc.getVersionNumber());
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Failed to save geometry from version: {}", e.getMessage(), e);
-            }
+        try {
+            versionService.saveGeometryFromVersion(versionDoc);
+        } catch (Exception e) {
+            log.error("Failed to save geometry from version: {}", e.getMessage(), e);
         }
     }
 
