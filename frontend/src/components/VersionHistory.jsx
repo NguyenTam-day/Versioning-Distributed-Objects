@@ -29,11 +29,6 @@ const VersionHistory = ({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
-    const [selectedVersions, setSelectedVersions] = useState({
-        from: null,
-        to: null,
-    });
-
     // ─── Load versions history ─────────────────────────
 
     const loadVersions = useCallback(async () => {
@@ -92,12 +87,6 @@ const VersionHistory = ({
 
     useEffect(() => {
 
-        // reset stale selections
-        setSelectedVersions({
-            from: null,
-            to: null,
-        });
-
         // reset stale versions trước khi load mới
         setVersions([]);
 
@@ -107,34 +96,7 @@ const VersionHistory = ({
 
     }, [objectId, loadVersions]);
 
-    // ─── Version selection for diff ───────────────────
 
-    const handleVersionSelect = (type, versionNumber) => {
-
-        setSelectedVersions((prev) => ({
-            ...prev,
-            [type]:
-                prev[type] === versionNumber
-                    ? null
-                    : versionNumber,
-        }));
-
-    };
-
-    const handleCompareDiff = () => {
-
-        if (
-            selectedVersions.from &&
-            selectedVersions.to &&
-            onDiffSelect
-        ) {
-            onDiffSelect(
-                selectedVersions.from,
-                selectedVersions.to
-            );
-        }
-
-    };
 
     // ─── Compute branches for DAG ─────────────────────
 
@@ -337,7 +299,6 @@ const VersionHistory = ({
                                     <th>Branch</th>
                                     <th>Site ID</th>
                                     <th>Sync Status</th>
-                                    <th>Compare</th>
                                 </tr>
 
                             </thead>
@@ -451,52 +412,7 @@ const VersionHistory = ({
                                                     {v.syncStatus}
                                                 </td>
 
-                                                <td>
 
-                                                    <div
-                                                        style={{
-                                                            display:
-                                                                "flex",
-                                                            gap:
-                                                                "0.25rem",
-                                                        }}
-                                                    >
-
-                                                        <button
-                                                            className={`btn ${selectedVersions.from ===
-                                                                    v.versionNumber
-                                                                    ? "btn-danger"
-                                                                    : "btn-secondary"
-                                                                }`}
-                                                            onClick={() =>
-                                                                handleVersionSelect(
-                                                                    "from",
-                                                                    v.versionNumber
-                                                                )
-                                                            }
-                                                        >
-                                                            From
-                                                        </button>
-
-                                                        <button
-                                                            className={`btn ${selectedVersions.to ===
-                                                                    v.versionNumber
-                                                                    ? "btn-success"
-                                                                    : "btn-secondary"
-                                                                }`}
-                                                            onClick={() =>
-                                                                handleVersionSelect(
-                                                                    "to",
-                                                                    v.versionNumber
-                                                                )
-                                                            }
-                                                        >
-                                                            To
-                                                        </button>
-
-                                                    </div>
-
-                                                </td>
 
                                             </tr>
 
@@ -510,21 +426,7 @@ const VersionHistory = ({
 
                     </div>
 
-                    {selectedVersions.from &&
-                        selectedVersions.to && (
 
-                            <button
-                                className="btn btn-primary"
-                                onClick={handleCompareDiff}
-                                style={{
-                                    marginTop: "1rem",
-                                    alignSelf: "flex-start",
-                                }}
-                            >
-                                Compare Versions →
-                            </button>
-
-                        )}
 
                 </>
 

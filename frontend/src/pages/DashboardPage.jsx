@@ -221,18 +221,7 @@ const DashboardPage = ({ onNavigate }) => {
         setBaseVersion(null); // clear after successful commit
     }, [objectId]);
 
-    // ─── Diff ──────────────────────────────────────────
 
-    const handleDiffVersions = (fromVersion, toVersion) => {
-        if (onNavigate) {
-            onNavigate("compare", {
-                objectId: objectId,
-                fromVersion: fromVersion,
-                toVersion: toVersion,
-                node: currentNode
-            });
-        }
-    };
 
     // ─── Version select ────────────────────────────────
 
@@ -392,7 +381,6 @@ const DashboardPage = ({ onNavigate }) => {
                     {objectId && (
                         <VersionHistory
                             objectId={objectId}
-                            onDiffSelect={handleDiffVersions}
                             onVersionSelect={handleVersionSelect}
                             baseVersion={baseVersion}
                             setBaseVersion={setBaseVersion}

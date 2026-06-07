@@ -26,15 +26,6 @@ const HomePage = ({ onNavigate }) => {
                         Open Dashboard
                     </button>
                     <button
-                        className="btn btn-secondary"
-                        onClick={() => onNavigate('compare')}
-                    >
-                        <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
-                            <path d="M9.573.677A.25.25 0 0 1 10 .854v4.396a.25.25 0 0 1-.427.177L8.22 4.074l-1.9 2.373-.942-.753 1.9-2.372-1.353-1.353A.25.25 0 0 1 6.1 1.543h3.473ZM3.868 9.2 5.042 7.28l.942.753-1.174 1.92 1.353 1.354a.25.25 0 0 1-.177.427H2.513a.25.25 0 0 1-.177-.427l1.532-1.532ZM11 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0ZM7 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0ZM3 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Zm12 0a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z" />
-                        </svg>
-                        Compare Nodes
-                    </button>
-                    <button
                         className="btn btn-outline"
                         onClick={() => onNavigate('demo')}
                     >
@@ -95,11 +86,8 @@ const HomePage = ({ onNavigate }) => {
                     <p style={{ marginBottom: '8px' }}>
                         <strong style={{ color: '#e6edf3' }}>2.</strong> Upload 3D files (OBJ, STL, STEP, IGES) to create versioned geometry.
                     </p>
-                    <p style={{ marginBottom: '8px' }}>
-                        <strong style={{ color: '#e6edf3' }}>3.</strong> View version history, create branches, and compare diffs.
-                    </p>
                     <p>
-                        <strong style={{ color: '#e6edf3' }}>4.</strong> Use <strong style={{ color: '#58a6ff', cursor: 'pointer' }} onClick={() => onNavigate('compare')}>Compare</strong> to diff geometry across nodes.
+                        <strong style={{ color: '#e6edf3' }}>3.</strong> View version history, create branches, and compare diffs.
                     </p>
                 </div>
             </div>
