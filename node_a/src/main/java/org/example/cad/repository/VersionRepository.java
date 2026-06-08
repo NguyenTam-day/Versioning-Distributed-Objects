@@ -31,6 +31,16 @@ public interface VersionRepository extends MongoRepository<VersionDoc, String> {
     Optional<VersionDoc> findByModelIdAndVersionNumber(String modelId, int versionNumber);
 
     /**
+     * Find all versions by model and version number (useful when conflicts exist)
+     */
+    List<VersionDoc> findAllByModelIdAndVersionNumber(String modelId, int versionNumber);
+
+    /**
+     * Find specific version by model, version number and branch
+     */
+    Optional<VersionDoc> findByModelIdAndVersionNumberAndBranchName(String modelId, int versionNumber, String branchName);
+
+    /**
      * Find latest version for a model
      */
     Optional<VersionDoc> findFirstByModelIdOrderByVersionNumberDesc(String modelId);
@@ -43,7 +53,7 @@ public interface VersionRepository extends MongoRepository<VersionDoc, String> {
     /**
      * Find specific version by model and version name
      */
-    Optional<VersionDoc> findByModelIdAndVersionName(String modelId, String versionName);
+    List<VersionDoc> findByModelIdAndVersionName(String modelId, String versionName);
 
     /**
      * Find versions created by specific site

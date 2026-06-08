@@ -320,7 +320,7 @@ public class VersionService {
                 break;
             }
             Optional<VersionDoc> parentOpt = versionRepository.findByModelIdAndVersionName(versionDoc.getModelId(),
-                    parentName);
+                    parentName).stream().findFirst();
             if (parentOpt.isPresent()) {
                 current = parentOpt.get();
             } else {
@@ -359,8 +359,14 @@ public class VersionService {
             try {
                 org.example.dv.Geometry3D geometry = reconstructGeometry(versionDoc);
                 if (geometry != null) {
-                    if (!geometry3DRepository.findByObjectIdAndVersionAndSiteId(versionDoc.getModelId(),
-                            versionDoc.getVersionNumber(), versionDoc.getSiteId()).isPresent()) {
+                    // Use List to avoid IncorrectResultSizeDataAccessException
+                    // when duplicate records exist (can happen with conflict versions synced between nodes)
+                    List<org.example.cad.domain.model.Geometry3DModel> existing =
+                            geometry3DRepository.findByObjectIdAndVersionAndSiteId(
+                                    versionDoc.getModelId(),
+                                    versionDoc.getVersionNumber(),
+                                    versionDoc.getSiteId());
+                    if (existing.isEmpty()) {
                         org.example.cad.domain.model.Geometry3DModel geoModel = org.example.cad.domain.model.Geometry3DModel
                                 .createNew(
                                         versionDoc.getModelId(),
@@ -397,5 +403,40 @@ public class VersionService {
                 .findFirstByModelIdOrderByVersionNumberDesc(modelId);
 
         return latest.orElse(null);
+    }
+
+    /**
+     * Convert reconstructed Geometry3D mesh back to standard Wavefront .obj file format string.
+     */
+    public String convertToObjFormat(Geometry3D geometry) {
+        if (geometry == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("# Reconstructed by Distributed CAD Versioning System\n");
+        sb.append("# Name: ").append(geometry.getName() != null ? geometry.getName() : "model.obj").append("\n\n");
+
+        // Write Vertices: v x y z
+        if (geometry.getVertices() != null) {
+            for (Geometry3D.Vertex v : geometry.getVertices()) {
+                if (v != null) {
+                    sb.append(String.format(java.util.Locale.US, "v %.6f %.6f %.6f\n", v.x, v.y, v.z));
+                }
+            }
+        }
+
+        // Write Faces: f i1 i2 i3...
+        if (geometry.getFaces() != null) {
+            for (Geometry3D.Face f : geometry.getFaces()) {
+                if (f != null && f.indices != null && !f.indices.isEmpty()) {
+                    sb.append("f");
+                    for (Integer idx : f.indices) {
+                        sb.append(" ").append(idx);
+                    }
+                    sb.append("\n");
+                }
+            }
+        }
+        return sb.toString();
     }
 }

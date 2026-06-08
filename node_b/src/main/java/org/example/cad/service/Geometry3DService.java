@@ -68,7 +68,7 @@ public class Geometry3DService {
 
         Geometry3D latestGeometry = null;
         if (parentVersion != null && !parentVersion.isEmpty()) {
-            Optional<VersionDoc> parentDocOpt = versionRepository.findByModelIdAndVersionName(objectId, parentVersion);
+            Optional<VersionDoc> parentDocOpt = versionRepository.findByModelIdAndVersionName(objectId, parentVersion).stream().findFirst();
             if (parentDocOpt.isPresent()) {
                 latestGeometry = versionService.reconstructGeometry(parentDocOpt.get());
             }

@@ -28,6 +28,11 @@ const VersionHistory = ({
     const [versions, setVersions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [downloadingVersion, setDownloadingVersion] = useState(null);
+
+    // ─── Conflict download warning state ──────────────
+    const [conflictDialog, setConflictDialog] = useState(null);
+    // conflictDialog = { objectId, versionNumber, branchName, blobUrl, filename } | null
 
     // ─── Load versions history ─────────────────────────
 
@@ -82,6 +87,53 @@ const VersionHistory = ({
         }
 
     }, [objectId, api]);
+
+    // ─── Download handler (reads headers, shows warning) ──
+
+    const handleDownload = useCallback(async (objectId, versionNumber, branchName, versionIdentifier) => {
+        setDownloadingVersion(versionIdentifier);
+        try {
+            const url = api.getDownloadUrl(objectId, versionNumber, branchName);
+            const res = await fetch(url);
+
+            if (!res.ok) {
+                throw new Error(`Server returned ${res.status}`);
+            }
+
+            const isConflict = res.headers.get("X-Conflict-Warning") === "true";
+            const actualBranchName  = res.headers.get("X-Conflict-Branch") || branchName || "conflict";
+
+            // Extract filename from Content-Disposition
+            const cd = res.headers.get("Content-Disposition") || "";
+            const nameMatch = cd.match(/filename="?([^"]+)"?/);
+            const filename = nameMatch ? nameMatch[1] : `model_v${versionNumber}.obj`;
+
+            const blob = await res.blob();
+            const blobUrl = URL.createObjectURL(blob);
+
+            if (isConflict) {
+                // Show confirm dialog before saving
+                setConflictDialog({ objectId, versionNumber, branchName: actualBranchName, blobUrl, filename });
+            } else {
+                // Download immediately
+                triggerDownload(blobUrl, filename);
+            }
+        } catch (err) {
+            setError(`Download failed: ${err.message}`);
+        } finally {
+            setDownloadingVersion(null);
+        }
+    }, [api]);
+
+    const triggerDownload = (blobUrl, filename) => {
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    };
 
     // ─── Reload khi objectId đổi ──────────────────────
 
@@ -144,6 +196,85 @@ const VersionHistory = ({
                 gap: "24px",
             }}
         >
+
+            {/* ─── Conflict Warning Dialog ────────── */}
+            {conflictDialog && (
+                <div style={{
+                    position: "fixed",
+                    inset: 0,
+                    background: "rgba(0,0,0,0.65)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 9999,
+                }}>
+                    <div style={{
+                        background: "var(--color-canvas-default, #161b22)",
+                        border: "1px solid #f85149",
+                        borderRadius: "12px",
+                        padding: "28px 32px",
+                        maxWidth: "420px",
+                        width: "90%",
+                        boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+                    }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+                            <span style={{ fontSize: "22px" }}>⚠️</span>
+                            <h3 style={{ margin: 0, color: "#f85149", fontSize: "16px" }}>
+                                Conflict Version Warning
+                            </h3>
+                        </div>
+                        <p style={{ color: "var(--color-text-primary)", fontSize: "14px", lineHeight: "1.6", marginBottom: "8px" }}>
+                            Version <strong style={{ fontFamily: "var(--font-mono)" }}>v{conflictDialog.versionNumber}</strong> has a{" "}
+                            <strong style={{ color: "#f85149" }}>CONFLICT</strong> status and lives on branch{" "}
+                            <code style={{ background: "rgba(248,81,73,0.15)", padding: "2px 6px", borderRadius: "4px", fontSize: "12px" }}>
+                                {conflictDialog.branchName}
+                            </code>.
+                        </p>
+                        <p style={{ color: "var(--color-text-secondary)", fontSize: "13px", marginBottom: "20px" }}>
+                            This file may differ from the accepted main-branch version. Proceed only if you intend to review the conflicting geometry.
+                        </p>
+                        <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                            <button
+                                id="conflict-dialog-cancel"
+                                onClick={() => {
+                                    URL.revokeObjectURL(conflictDialog.blobUrl);
+                                    setConflictDialog(null);
+                                }}
+                                style={{
+                                    padding: "8px 18px",
+                                    borderRadius: "6px",
+                                    border: "1px solid var(--color-border-default)",
+                                    background: "transparent",
+                                    color: "var(--color-text-primary)",
+                                    cursor: "pointer",
+                                    fontSize: "13px",
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                id="conflict-dialog-confirm"
+                                onClick={() => {
+                                    triggerDownload(conflictDialog.blobUrl, conflictDialog.filename);
+                                    setConflictDialog(null);
+                                }}
+                                style={{
+                                    padding: "8px 18px",
+                                    borderRadius: "6px",
+                                    border: "none",
+                                    background: "#f85149",
+                                    color: "#fff",
+                                    cursor: "pointer",
+                                    fontSize: "13px",
+                                    fontWeight: "bold",
+                                }}
+                            >
+                                Download Anyway
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div>
 
@@ -299,6 +430,7 @@ const VersionHistory = ({
                                     <th>Branch</th>
                                     <th>Site ID</th>
                                     <th>Sync Status</th>
+                                    <th>Actions</th>
                                 </tr>
 
                             </thead>
@@ -410,6 +542,41 @@ const VersionHistory = ({
 
                                                 <td>
                                                     {v.syncStatus}
+                                                </td>
+
+                                                <td>
+                                                                                                    <button
+                                                        id={`download-btn-${v.versionNumber}-${v.branchName || "main"}`}
+                                                        onClick={() => handleDownload(objectId, v.versionNumber, v.branchName, v.id || v.versionName)}
+                                                        disabled={downloadingVersion === (v.id || v.versionName)}
+                                                        style={{
+                                                            fontSize: "11px",
+                                                            padding: "4px 8px",
+                                                            margin: 0,
+                                                            cursor: downloadingVersion === (v.id || v.versionName) ? "not-allowed" : "pointer",
+                                                            background: v.syncStatus === "CONFLICT" || v.conflicted
+                                                                ? "rgba(248,81,73,0.12)"
+                                                                : "rgba(255, 255, 255, 0.05)",
+                                                            border: v.syncStatus === "CONFLICT" || v.conflicted
+                                                                ? "1px solid #f85149"
+                                                                : "1px solid var(--color-border-default)",
+                                                            borderRadius: "4px",
+                                                            color: v.syncStatus === "CONFLICT" || v.conflicted
+                                                                ? "#f85149"
+                                                                : "var(--color-text-primary)",
+                                                            opacity: downloadingVersion === (v.id || v.versionName) ? 0.6 : 1,
+                                                            transition: "all 0.2s",
+                                                        }}
+                                                        title={v.syncStatus === "CONFLICT" || v.conflicted
+                                                            ? "⚠️ CONFLICT version — you will be asked to confirm"
+                                                            : "Download as .OBJ file"}
+                                                    >
+                                                        {downloadingVersion === (v.id || v.versionName)
+                                                            ? "↓ Loading..."
+                                                            : v.syncStatus === "CONFLICT" || v.conflicted
+                                                                ? "⚠️ Download .OBJ"
+                                                                : "Download .OBJ"}
+                                                    </button>
                                                 </td>
 
 

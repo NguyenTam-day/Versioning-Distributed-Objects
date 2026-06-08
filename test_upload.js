@@ -124,7 +124,7 @@ async function main() {
       console.log(`      Vertices: ${result.vertexCount} | Faces: ${result.faceCount}`);
 
       // Update parent for next version
-      parentVersion = currentVersionName;
+      parentVersion = result.versionId;
 
       // Pause slightly for a realistic sequence
       await new Promise(resolve => setTimeout(resolve, 300));

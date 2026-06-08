@@ -20,7 +20,12 @@ public interface Geometry3DRepository extends MongoRepository<Geometry3DModel, S
      */
     Optional<Geometry3DModel> findByObjectIdAndVersion(String objectId, int version);
 
-    Optional<Geometry3DModel> findByObjectIdAndVersionAndSiteId(String objectId, int version, String siteId);
+    /**
+     * Find geometry records by objectId, version, and siteId.
+     * Returns List to handle duplicate records safely
+     * (can occur when conflict versions are synced between nodes).
+     */
+    List<Geometry3DModel> findByObjectIdAndVersionAndSiteId(String objectId, int version, String siteId);
 
     /**
      * Find latest version for an object

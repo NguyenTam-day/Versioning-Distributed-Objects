@@ -183,5 +183,10 @@ export function createNodeApi(nodeName) {
         getVersionDelta(modelId, versionNumber) {
             return api.get(`/version/${modelId}/delta/${versionNumber}`);
         },
+
+        getDownloadUrl(modelId, versionNumber, branchName = "") {
+            const query = branchName ? `?branchName=${encodeURIComponent(branchName)}` : "";
+            return `${this.baseURL}/version/${modelId}/download/${versionNumber}${query}`;
+        },
     };
 }

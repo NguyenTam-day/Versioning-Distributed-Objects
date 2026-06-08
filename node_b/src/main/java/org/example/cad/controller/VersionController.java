@@ -18,11 +18,15 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import org.example.cad.service.SyncService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/version")
 @CrossOrigin(origins = "*")
 public class VersionController {
+
+    private static final Logger log = LoggerFactory.getLogger(VersionController.class);
 
     private final VersionRepository versionRepository;
     private final VersionService versionService;
@@ -402,6 +406,84 @@ public class VersionController {
         }
 
         return ResponseEntity.ok(new ApiResponse<>(true, "Delta retrieved", result));
+    }
+
+    /**
+     * GET /api/version/{modelId}/download/{versionNumber}
+     * Reconstructs the target version geometry and returns it as a downloadable .obj file.
+     *
+     * <p>If the version has syncStatus=CONFLICT or branchName starts with "conflict/",
+     * the response still returns the file but includes warning headers:
+     * <ul>
+     *   <li>X-Version-Status: CONFLICT</li>
+     *   <li>X-Conflict-Warning: true</li>
+     *   <li>X-Conflict-Branch: &lt;branchName&gt;</li>
+     * </ul>
+     */
+    @GetMapping("/{modelId}/download/{versionNumber}")
+    public ResponseEntity<byte[]> downloadObjFile(
+            @PathVariable String modelId,
+            @PathVariable int versionNumber,
+            @RequestParam(required = false) String branchName) {
+
+        Optional<VersionDoc> versionOpt = Optional.empty();
+        if (branchName != null && !branchName.isEmpty()) {
+            versionOpt = versionRepository.findByModelIdAndVersionNumberAndBranchName(modelId, versionNumber, branchName);
+        }
+
+        if (versionOpt.isEmpty()) {
+            List<VersionDoc> versions = versionRepository.findAllByModelIdAndVersionNumber(modelId, versionNumber);
+            if (versions.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+            if (versions.size() == 1) {
+                versionOpt = Optional.of(versions.get(0));
+            } else {
+                versionOpt = versions.stream()
+                        .filter(v -> "main".equals(v.getBranchName()))
+                        .findFirst();
+                if (versionOpt.isEmpty()) {
+                    versionOpt = Optional.of(versions.get(0));
+                }
+            }
+        }
+
+        VersionDoc version = versionOpt.get();
+
+        // Detect CONFLICT status
+        boolean isConflicted = "CONFLICT".equals(version.getSyncStatus())
+                || (version.getBranchName() != null && version.getBranchName().startsWith("conflict/"));
+
+        org.example.dv.Geometry3D reconstructed = versionService.reconstructGeometry(version);
+        if (reconstructed == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+
+        String objContent = versionService.convertToObjFormat(reconstructed);
+        byte[] data = objContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+        String filename = modelId + "_v" + versionNumber
+                + (isConflicted ? "_CONFLICT" : "") + ".obj";
+
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.set(org.springframework.http.HttpHeaders.CONTENT_TYPE, "application/octet-stream");
+        headers.set(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=\"" + filename + "\"");
+        headers.set("X-Version-Status", isConflicted ? "CONFLICT" : "ACTIVE");
+        headers.set("X-Conflict-Warning", isConflicted ? "true" : "false");
+        if (isConflicted) {
+            headers.set("X-Conflict-Branch",
+                    version.getBranchName() != null ? version.getBranchName() : "unknown");
+            log.warn("Downloading CONFLICT version: modelId={}, versionNumber={}, branch={}",
+                    modelId, versionNumber, version.getBranchName());
+        }
+        // Expose custom headers to browser (CORS)
+        headers.set("Access-Control-Expose-Headers",
+                "X-Version-Status, X-Conflict-Warning, X-Conflict-Branch");
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(data);
     }
 }
 
