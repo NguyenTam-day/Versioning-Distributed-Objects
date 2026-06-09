@@ -120,6 +120,23 @@ async function triggerPush(sourceNodeUrl, modelId, targetNodeUrl) {
 // Helper to delay execution
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Simulate client checkout/download to get the latest parent version name
+async function checkoutLatestVersion(nodeUrl, modelId, branchName = 'main') {
+  const response = await fetch(`${nodeUrl}/api/version/checkout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ modelId, branchName })
+  });
+  if (!response.ok) {
+    throw new Error(`Checkout from ${nodeUrl} failed (HTTP ${response.status})`);
+  }
+  const result = await response.json();
+  if (!result.success || !result.data) {
+    throw new Error(`Checkout from ${nodeUrl} returned unsuccessful: ${result.message}`);
+  }
+  return result.data.versionName;
+}
+
 async function main() {
   const randomSuffix = Math.floor(1000 + Math.random() * 9000);
   const modelId = `conflict-demo-${randomSuffix}`;
@@ -195,18 +212,22 @@ async function main() {
     // 6. Concurrent updates
     // Node A uploads v2_A
     console.log('\n✏️ Step 5a: Node A edits model and uploads new version (v2) locally...');
+    const parentVersionA = await checkoutLatestVersion(NODE_A, modelId, 'main');
+    console.log(`   [Node A Checkout] Determined parent (base) version: \x1b[35m${parentVersionA}\x1b[0m`);
     const objV2_A = generateCubeObj(2, 10); // modifier 10
-    await uploadVersion(NODE_A, modelId, 2, objV2_A, 'v1_A');
-    console.log(`   ✅ Node A saved version: \x1b[33mv2_A\x1b[0m (branch: \x1b[36mmain\x1b[0m, parent: \x1b[35mv1_A\x1b[0m)`);
+    await uploadVersion(NODE_A, modelId, 2, objV2_A, parentVersionA);
+    console.log(`   ✅ Node A saved version: \x1b[33mv2_A\x1b[0m (branch: \x1b[36mmain\x1b[0m, parent: \x1b[35m${parentVersionA}\x1b[0m)`);
 
     // Node B uploads v2_B
     console.log('✏️ Step 5b: Node B concurrently edits same model and uploads version (v2) locally...');
     // We add a short delay to simulate slightly later timestamp for Node B's version
     await sleep(2000);
+    const parentVersionB = await checkoutLatestVersion(NODE_B, modelId, 'main');
+    console.log(`   [Node B Checkout] Determined parent (base) version: \x1b[35m${parentVersionB}\x1b[0m`);
     const objV2_B = generateCubeObj(2, 20); // modifier 20
-    await uploadVersion(NODE_B, modelId, 2, objV2_B, 'v1_A');
-    console.log(`   ✅ Node B saved version: \x1b[33mv2_B\x1b[0m (branch: \x1b[36mmain\x1b[0m, parent: \x1b[35mv1_A\x1b[0m)`);
-    console.log(`      Both nodes have concurrently created version 2 from parent \x1b[35mv1_A\x1b[0m!`);
+    await uploadVersion(NODE_B, modelId, 2, objV2_B, parentVersionB);
+    console.log(`   ✅ Node B saved version: \x1b[33mv2_B\x1b[0m (branch: \x1b[36mmain\x1b[0m, parent: \x1b[35m${parentVersionB}\x1b[0m)`);
+    console.log(`      Both nodes have concurrently created version 2 from parent \x1b[35m${parentVersionA}\x1b[0m!`);
 
     // Verify local histories before sync
     console.log('\n🔍 Local status before sync reconnect:');
@@ -306,6 +327,10 @@ async function main() {
 
     console.log('\n🎉 CONFLICT DETECTION AND RESOLUTION DEMO PASSED SUCCESSFULLY!');
     console.log('========================================================');
+    console.log(`🚀 STARTING DISTRIBUTED CONFLICT & RESOLUTION TEST`);
+    console.log(`📦 Model ID: \x1b[36m${modelId}\x1b[0m`);
+    console.log('========================================================\n');
+
 
   } catch (error) {
     console.error('\n💥 Test error:', error);

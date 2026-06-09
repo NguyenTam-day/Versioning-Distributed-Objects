@@ -136,7 +136,8 @@ public class VersionService {
             boolean hasActivePredecessor = existingVersions.stream()
                     .anyMatch(v -> "main".equals(v.getBranchName())
                             && ("SYNCED".equals(v.getSyncStatus())
-                                    || "ACTIVE".equals(v.getSyncStatus())));
+                                    || "ACTIVE".equals(v.getSyncStatus())
+                                    || "PENDING_SYNC".equals(v.getSyncStatus())));
             if (hasActivePredecessor) {
                 parentVersion = currentHead.getVersionName();
             }

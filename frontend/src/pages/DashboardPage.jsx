@@ -168,6 +168,16 @@ const DashboardPage = ({ onNavigate }) => {
         fetchSyncStatus();
     }, [fetchSyncStatus]);
 
+    // Sync objectId and load baseVersion from localStorage if available
+    useEffect(() => {
+        if (objectId) {
+            const savedVersion = localStorage.getItem(`downloaded_version_${objectId}`);
+            setBaseVersion(savedVersion || null);
+        } else {
+            setBaseVersion(null);
+        }
+    }, [objectId]);
+
     const handleToggleSync = async () => {
         try {
             if (syncEnabled) {
@@ -196,9 +206,11 @@ const DashboardPage = ({ onNavigate }) => {
         try {
             const response = await api.checkout(id, currentBranch);
             const version = response.data?.data || response.data;
+            const targetVersionName = version.versionName || `v${version.versionNumber}`;
             setObjectId(id);
             setCheckedOutVersion(version);
-            setBaseVersion(version.versionName || `v${version.versionNumber}`);
+            localStorage.setItem(`downloaded_version_${id}`, targetVersionName);
+            setBaseVersion(targetVersionName);
             setActiveTab("history");
         } catch (err) {
             // If no version found, still set objectId for first upload
@@ -215,11 +227,17 @@ const DashboardPage = ({ onNavigate }) => {
     // ─── Upload success ────────────────────────────────
 
     const handleUploadSuccess = useCallback((data) => {
-        setObjectId(data.objectId || objectId);
+        const targetObjectId = data.objectId || objectId;
+        setObjectId(targetObjectId);
         setSelectedGeometry(data.jsonRepresentation);
         setCheckedOutVersion(null);
-        setBaseVersion(null); // clear after successful commit
-    }, [objectId]);
+
+        // Save new version as base version
+        const siteSuffix = currentNode === "node-a" ? "A" : "B";
+        const uploadedVersionName = `v${data.versionNumber}_${siteSuffix}`;
+        localStorage.setItem(`downloaded_version_${targetObjectId}`, uploadedVersionName);
+        setBaseVersion(uploadedVersionName);
+    }, [objectId, currentNode]);
 
 
 
@@ -328,6 +346,7 @@ const DashboardPage = ({ onNavigate }) => {
                     onClear={() => {
                         setCheckedOutVersion(null);
                         setBaseVersion(null);
+                        localStorage.removeItem(`downloaded_version_${objectId}`);
                     }}
                 />
             )}

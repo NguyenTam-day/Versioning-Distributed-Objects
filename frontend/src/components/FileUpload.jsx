@@ -41,20 +41,17 @@ const FileUpload = ({
         }
     }, [objectIdProp]);
 
-    const [availableVersions, setAvailableVersions] = useState([]);
     const [isCreatingBranch, setIsCreatingBranch] = useState(false);
     const [newBranchName, setNewBranchName] = useState("");
 
-    // Load available branches and versions for dropdown selectors
+    // Load available branches for dropdown selector
     useEffect(() => {
-        const loadMetadata = async () => {
+        const loadBranches = async () => {
             if (!objectId || !api) {
                 setAvailableBranches(["main"]);
-                setAvailableVersions([]);
                 return;
             }
             try {
-                // Fetch branches
                 const branchResponse = await api.getBranches(objectId);
                 const branchData = branchResponse.data;
                 const branchList = branchData?.data || (Array.isArray(branchData) ? branchData : []);
@@ -62,20 +59,11 @@ const FileUpload = ({
                     const finalBranches = branchList.includes("main") ? branchList : ["main", ...branchList];
                     setAvailableBranches(finalBranches);
                 }
-
-                // Fetch versions (history)
-                const historyResponse = await api.getHistory(objectId);
-                const historyData = historyResponse.data;
-                const historyList = historyData?.data || (Array.isArray(historyData) ? historyData : []);
-                if (Array.isArray(historyList)) {
-                    const sortedVersions = [...historyList].sort((a, b) => b.versionNumber - a.versionNumber);
-                    setAvailableVersions(sortedVersions);
-                }
             } catch (err) {
-                console.error("Failed to load metadata in FileUpload:", err);
+                console.error("Failed to load branches in FileUpload:", err);
             }
         };
-        loadMetadata();
+        loadBranches();
     }, [objectId, api]);
 
     // ─── Drag & Drop handlers ─────────────────────────
@@ -120,11 +108,11 @@ const FileUpload = ({
         setSuccess("");
 
         try {
-            // Gửi parentVersion (baseVersion) và branchName (selectedBranch) theo yêu cầu của user
+            // Gửi parentVersion (baseVersion từ version đã download) và branchName theo user chọn
             const response = await api.uploadGeometry({
                 objectId,
                 file,
-                parentVersion: baseVersion,
+                parentVersion: baseVersion || null,
                 branchName: selectedBranch
             });
 
@@ -246,26 +234,60 @@ const FileUpload = ({
                         </select>
                     )}
                 </div>
+
+                {/* Base Version — read-only, set automatically from downloaded/checked-out version */}
                 <div style={{ flex: 1 }}>
-                    <label>Parent Version (Base)</label>
-                    <select
-                        value={baseVersion || ""}
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            if (setBaseVersion) setBaseVersion(val || null);
-                        }}
-                        disabled={loading}
-                    >
-                        <option value="">None (First Version)</option>
-                        {availableVersions.map((v) => {
-                            const label = `${v.versionName} - ${v.commitMessage || 'Upload file'} (${v.branchName})`;
-                            return (
-                                <option key={v.versionName} value={v.versionName}>
-                                    {label}
-                                </option>
-                            );
-                        })}
-                    </select>
+                    <label style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        Base Version
+                        <span style={{
+                            fontSize: "10px",
+                            background: "rgba(88,166,255,0.15)",
+                            color: "var(--color-text-link)",
+                            border: "1px solid rgba(88,166,255,0.3)",
+                            borderRadius: "4px",
+                            padding: "1px 5px",
+                            fontWeight: 500,
+                        }}>auto</span>
+                    </label>
+                    {baseVersion ? (
+                        <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            padding: "8px 12px",
+                            background: "rgba(63,185,80,0.08)",
+                            border: "1px solid rgba(63,185,80,0.3)",
+                            borderRadius: "6px",
+                            minHeight: "38px",
+                        }}>
+                            <span style={{ fontSize: "14px" }}>📥</span>
+                            <code style={{
+                                fontFamily: "var(--font-mono)",
+                                fontSize: "13px",
+                                fontWeight: "bold",
+                                color: "var(--color-success-fg)",
+                            }}>{baseVersion}</code>
+                            <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginLeft: "auto" }}>
+                                (from download)
+                            </span>
+                        </div>
+                    ) : (
+                        <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            padding: "8px 12px",
+                            background: "var(--color-canvas-inset)",
+                            border: "1px dashed var(--color-border-default)",
+                            borderRadius: "6px",
+                            minHeight: "38px",
+                            color: "var(--color-text-muted)",
+                            fontSize: "12px",
+                        }}>
+                            <span style={{ fontSize: "14px" }}>⬇️</span>
+                            Download a version first to set base
+                        </div>
+                    )}
                 </div>
             </div>
 

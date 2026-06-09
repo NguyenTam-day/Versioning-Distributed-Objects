@@ -83,6 +83,23 @@ async function uploadVersion(modelId, version, objContent, parentVersion) {
   return await response.json();
 }
 
+// Simulate client checkout/download to get the latest parent version name
+async function checkoutLatestVersion(modelId, branchName = 'main') {
+  const response = await fetch('http://localhost:5000/api/version/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ modelId, branchName })
+  });
+  if (!response.ok) {
+    throw new Error(`Checkout failed (HTTP ${response.status})`);
+  }
+  const result = await response.json();
+  if (!result.success || !result.data) {
+    throw new Error(`Checkout returned unsuccessful: ${result.message}`);
+  }
+  return result.data.versionName;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const randomSuffix = Math.floor(100 + Math.random() * 900);
@@ -116,15 +133,17 @@ async function main() {
     const objContent = generateCubeObj(version);
 
     try {
+      if (version > 1) {
+        parentVersion = await checkoutLatestVersion(modelId, 'main');
+        console.log(`   [Checkout] Determined parent (base) version: \x1b[35m${parentVersion}\x1b[0m`);
+      }
+
       const result = await uploadVersion(modelId, version, objContent, parentVersion);
 
       // Compute the versionName constructed by backend
       const currentVersionName = `v${version}_A`;
       console.log(`   ✅ Success! Created: \x1b[35m${currentVersionName}\x1b[0m`);
       console.log(`      Vertices: ${result.vertexCount} | Faces: ${result.faceCount}`);
-
-      // Update parent for next version
-      parentVersion = result.versionId;
 
       // Pause slightly for a realistic sequence
       await new Promise(resolve => setTimeout(resolve, 300));

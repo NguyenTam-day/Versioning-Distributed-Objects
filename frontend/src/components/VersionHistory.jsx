@@ -90,8 +90,8 @@ const VersionHistory = ({
 
     // ─── Download handler (reads headers, shows warning) ──
 
-    const handleDownload = useCallback(async (objectId, versionNumber, branchName, versionIdentifier) => {
-        setDownloadingVersion(versionIdentifier);
+    const handleDownload = useCallback(async (objectId, versionNumber, branchName, versionName) => {
+        setDownloadingVersion(versionName);
         try {
             const url = api.getDownloadUrl(objectId, versionNumber, branchName);
             const res = await fetch(url);
@@ -113,17 +113,21 @@ const VersionHistory = ({
 
             if (isConflict) {
                 // Show confirm dialog before saving
-                setConflictDialog({ objectId, versionNumber, branchName: actualBranchName, blobUrl, filename });
+                setConflictDialog({ objectId, versionNumber, branchName: actualBranchName, blobUrl, filename, versionName });
             } else {
                 // Download immediately
                 triggerDownload(blobUrl, filename);
+                localStorage.setItem(`downloaded_version_${objectId}`, versionName);
+                if (setBaseVersion) {
+                    setBaseVersion(versionName);
+                }
             }
         } catch (err) {
             setError(`Download failed: ${err.message}`);
         } finally {
             setDownloadingVersion(null);
         }
-    }, [api]);
+    }, [api, setBaseVersion]);
 
     const triggerDownload = (blobUrl, filename) => {
         const a = document.createElement("a");
@@ -256,6 +260,10 @@ const VersionHistory = ({
                                 id="conflict-dialog-confirm"
                                 onClick={() => {
                                     triggerDownload(conflictDialog.blobUrl, conflictDialog.filename);
+                                    localStorage.setItem(`downloaded_version_${conflictDialog.objectId}`, conflictDialog.versionName);
+                                    if (setBaseVersion) {
+                                        setBaseVersion(conflictDialog.versionName);
+                                    }
                                     setConflictDialog(null);
                                 }}
                                 style={{
@@ -545,15 +553,15 @@ const VersionHistory = ({
                                                 </td>
 
                                                 <td>
-                                                                                                    <button
+                                                    <button
                                                         id={`download-btn-${v.versionNumber}-${v.branchName || "main"}`}
-                                                        onClick={() => handleDownload(objectId, v.versionNumber, v.branchName, v.id || v.versionName)}
-                                                        disabled={downloadingVersion === (v.id || v.versionName)}
+                                                        onClick={() => handleDownload(objectId, v.versionNumber, v.branchName, v.versionName)}
+                                                        disabled={downloadingVersion === v.versionName}
                                                         style={{
                                                             fontSize: "11px",
                                                             padding: "4px 8px",
                                                             margin: 0,
-                                                            cursor: downloadingVersion === (v.id || v.versionName) ? "not-allowed" : "pointer",
+                                                            cursor: downloadingVersion === v.versionName ? "not-allowed" : "pointer",
                                                             background: v.syncStatus === "CONFLICT" || v.conflicted
                                                                 ? "rgba(248,81,73,0.12)"
                                                                 : "rgba(255, 255, 255, 0.05)",
@@ -564,14 +572,14 @@ const VersionHistory = ({
                                                             color: v.syncStatus === "CONFLICT" || v.conflicted
                                                                 ? "#f85149"
                                                                 : "var(--color-text-primary)",
-                                                            opacity: downloadingVersion === (v.id || v.versionName) ? 0.6 : 1,
+                                                            opacity: downloadingVersion === v.versionName ? 0.6 : 1,
                                                             transition: "all 0.2s",
                                                         }}
                                                         title={v.syncStatus === "CONFLICT" || v.conflicted
-                                                            ? "⚠️ CONFLICT version — you will be asked to confirm"
-                                                            : "Download as .OBJ file"}
+                                                            ? "⚠️ CONFLICT version — you will be asked to confirm\nDownloading will set this as your base version."
+                                                            : "Download as .OBJ file — sets as base version for next upload"}
                                                     >
-                                                        {downloadingVersion === (v.id || v.versionName)
+                                                        {downloadingVersion === v.versionName
                                                             ? "↓ Loading..."
                                                             : v.syncStatus === "CONFLICT" || v.conflicted
                                                                 ? "⚠️ Download .OBJ"
